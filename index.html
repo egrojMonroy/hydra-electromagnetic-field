@@ -23,7 +23,6 @@
       width: 100%;
       height: 100%;
     }
-    /* Noisy frame — intensity driven by audio */
     #noise-border {
       position: fixed;
       inset: 0;
@@ -54,7 +53,7 @@
     }
     #ui p {
       margin: 0 auto 1.4rem;
-      max-width: 30rem;
+      max-width: 28rem;
       color: #8aa3ba;
       line-height: 1.5;
     }
@@ -94,16 +93,15 @@
     <div>
       <h1>Electromagnetic Field</h1>
       <p>
-        Dipole field lines + transverse EM radiation (E ⊥ B ⊥ propagation).
-        Mic drives field amount and border noise. Magnets: 30 s per phase on cubic paths.
+        Magnetic field lines around square bar magnets.
+        Mic drives field amount and border noise. 30 s per choreography phase.
       </p>
       <button id="start" type="button">Start</button>
     </div>
   </div>
   <div id="hud">
-    1–4 cubes · mouse tilt · mic = field amount + noisy border<br />
-    30 s phases: cluster → split → cube orbit → two groups<br />
-    gold = E · cyan = B · both in phase, transverse to travel
+    1–4 magnets · mouse tilt · mic = field + noisy border<br />
+    30 s: cluster → split → cube path → two groups
   </div>
 
   <script type="module">
@@ -160,7 +158,6 @@
       )
     }
 
-    // High band → border noise grain
     function noiseEnergy() {
       return (
         fftBins[4] * 0.25 +
@@ -181,7 +178,7 @@
     }
 
     // ------------------------------------------------------------
-    // NOISY BORDER (2D overlay — loud sound = noisy frame, not pale fill)
+    // NOISY BORDER (loud = edge noise, not pale wash)
     // ------------------------------------------------------------
 
     const noiseCanvas = document.getElementById("noise-border")
@@ -193,6 +190,10 @@
     }
     resizeNoise()
     window.addEventListener("resize", resizeNoise)
+
+    function clamp01(x) {
+      return Math.max(0, Math.min(1, x))
+    }
 
     function hash2(x, y, t) {
       const s = Math.sin(x * 127.1 + y * 311.7 + t * 17.3) * 43758.5453
@@ -207,13 +208,11 @@
       const intensity = borderNoise
       if (intensity < 0.04) return
 
-      // Frame thickness grows with noise energy
       const base = Math.max(10, Math.min(w, h) * 0.035)
       const thick = base * (0.7 + intensity * 1.8)
       const t = now * 0.001
       const step = Math.max(2, Math.floor(4 - intensity * 2))
 
-      // Edge bands only — keep center clean
       const bands = [
         { x0: 0, y0: 0, x1: w, y1: thick },
         { x0: 0, y0: h - thick, x1: w, y1: h },
@@ -224,7 +223,6 @@
       for (const b of bands) {
         for (let y = Math.floor(b.y0); y < b.y1; y += step) {
           for (let x = Math.floor(b.x0); x < b.x1; x += step) {
-            // Distance from outer rim → stronger noise at the very edge
             const dx = Math.min(x, w - 1 - x)
             const dy = Math.min(y, h - 1 - y)
             const edge = Math.min(dx, dy)
@@ -234,22 +232,19 @@
             const a = edgeW * intensity * (0.15 + n * 0.85) * (0.4 + spark)
             if (a < 0.03) continue
 
-            // Jagged inward bite
             const jag = (n - 0.5) * thick * intensity * 0.55
             const px = x + (dx < dy ? jag * (x < w / 2 ? 1 : -1) : 0)
             const py = y + (dy <= dx ? jag * (y < h / 2 ? 1 : -1) : 0)
 
-            // Warm/cool grain — not a wash of light blue over the scene
-            const warm = spark > 0.55
-            nctx.fillStyle = warm
-              ? `rgba(255, ${140 + n * 80 | 0}, 60, ${a})`
-              : `rgba(80, ${160 + n * 60 | 0}, 255, ${a * 0.75})`
+            nctx.fillStyle =
+              spark > 0.55
+                ? `rgba(255, ${140 + (n * 80) | 0}, 60, ${a})`
+                : `rgba(80, ${160 + (n * 60) | 0}, 255, ${a * 0.75})`
             nctx.fillRect(px, py, step + 1, step + 1)
           }
         }
       }
 
-      // Crackling outer stroke
       nctx.strokeStyle = `rgba(200, 220, 255, ${0.08 + intensity * 0.35})`
       nctx.lineWidth = 1 + intensity * 2
       nctx.setLineDash([2 + intensity * 8, 3 + intensity * 6])
@@ -289,17 +284,13 @@
       renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
-    function clamp01(x) {
-      return Math.max(0, Math.min(1, x))
-    }
-
     function smoothstep(edge0, edge1, x) {
       const t = clamp01((x - edge0) / (edge1 - edge0))
       return t * t * (3 - 2 * t)
     }
 
     // ------------------------------------------------------------
-    // MAGNETS (cube markers)
+    // MAGNETS — square bar magnets (real N/S blocks)
     // ------------------------------------------------------------
 
     const magnets = [
@@ -320,13 +311,11 @@
       ) {
         activeMagnets = Number(event.key)
         rebuildField()
-        rebuildVectors()
         createMagnetMarkers()
         syncMagnetMarkers()
       }
     })
 
-    // 30 s per phase × 4 phases
     const PHASE_MS = 30 * 1000
     const LOOP_MS = PHASE_MS * 4
     const choreoStart = performance.now()
@@ -337,14 +326,11 @@
     const _tmpD = new THREE.Vector3()
     const _tmpM = new THREE.Vector3()
 
-    // Point on a cube perimeter (wireframe orbit), t in [0,1)
     function pointOnCubeOrbit(t, half, lane) {
-      const per = (t % 1 + 1) % 1
-      // 12 edges of a cube, pick a face-ring of 4 edges (horizontal belt) + vertical lane
+      const per = ((t % 1) + 1) % 1
       const edge = Math.floor(per * 4) % 4
       const u = (per * 4) % 1
       let x = 0
-      let y = lane
       let z = 0
       if (edge === 0) {
         x = THREE.MathUtils.lerp(-half, half, u)
@@ -359,18 +345,19 @@
         x = -half
         z = THREE.MathUtils.lerp(half, -half, u)
       }
-      // Fold onto cube faces slightly in Y for true 3D cube feel
       const yFold = Math.sin(per * Math.PI * 2) * half * 0.35
-      return _tmpC.set(x, y + yFold, z)
+      return _tmpC.set(x, lane + yFold, z)
     }
 
     function updateMagnetChoreography(now) {
       const u = ((now - choreoStart) % LOOP_MS) / LOOP_MS
-      const minute = u * 4 // 0..4 “phase units” (each = 30s)
+      const minute = u * 4
 
       let wCluster = 1 - smoothstep(0.85, 1.15, minute)
-      let wSplit = smoothstep(0.85, 1.15, minute) * (1 - smoothstep(1.85, 2.15, minute))
-      let wOrbit = smoothstep(1.85, 2.15, minute) * (1 - smoothstep(2.85, 3.15, minute))
+      let wSplit =
+        smoothstep(0.85, 1.15, minute) * (1 - smoothstep(1.85, 2.15, minute))
+      let wOrbit =
+        smoothstep(1.85, 2.15, minute) * (1 - smoothstep(2.85, 3.15, minute))
       let wGroups = smoothstep(2.85, 3.15, minute)
 
       const wSum = wCluster + wSplit + wOrbit + wGroups
@@ -381,8 +368,7 @@
         wGroups /= wSum
       }
 
-      // One full cube lap during the orbit phase (~30s)
-      const orbitT = (minute - 2)
+      const orbitT = minute - 2
 
       for (let i = 0; i < 4; i++) {
         const clusterR = 0.32
@@ -403,12 +389,10 @@
           splitR * Math.cos(splitElev) * Math.sin(splitPhi)
         )
 
-        // Cube orbit (was circle)
         const half = 2.2
         const lane = (i - 1.5) * 0.55
-        const tOrbit = ((orbitT + i * 0.25) % 1 + 1) % 1
+        const tOrbit = (((orbitT + i * 0.25) % 1) + 1) % 1
         pointOnCubeOrbit(tOrbit, half, lane)
-        // pointOnCubeOrbit writes _tmpC
 
         const groupSide = i < 2 ? -1 : 1
         const pair = i % 2
@@ -440,7 +424,7 @@
     }
 
     // ------------------------------------------------------------
-    // DIPOLE FIELD
+    // DIPOLE FIELD LINES ONLY
     // ------------------------------------------------------------
 
     function magneticField(point) {
@@ -483,15 +467,10 @@
     }
 
     const fieldGroup = new THREE.Group()
-    const vectorGroup = new THREE.Group()
     const magnetGroup = new THREE.Group()
-    const emWaveGroup = new THREE.Group()
     scene.add(fieldGroup)
-    scene.add(vectorGroup)
     scene.add(magnetGroup)
-    scene.add(emWaveGroup)
 
-    // Field lines stay a stable deep teal — loudness does NOT bleach to light blue
     const FIELD_COLOR = new THREE.Color(0.2, 0.55, 0.85)
 
     function makeTube(points, strength) {
@@ -508,7 +487,6 @@
       const material = new THREE.MeshBasicMaterial({
         color: FIELD_COLOR,
         transparent: true,
-        // Density via opacity, but capped so it never washes out pale
         opacity: 0.14 + Math.min(0.45, strength * 0.35),
         blending: THREE.AdditiveBlending,
         depthWrite: false
@@ -551,71 +529,37 @@
       }
     }
 
-    function rebuildVectors() {
-      vectorGroup.clear()
-      const strength = fieldAmount
-      const half = 2 + Math.floor(clamp01(strength) * 2)
-      const step = 1.35 - clamp01(strength) * 0.25
-
-      for (let ix = -half; ix <= half; ix++) {
-        for (let iy = -half; iy <= half; iy++) {
-          for (let iz = -half; iz <= half; iz++) {
-            if (ix * ix + iy * iy + iz * iz > half * half + 1) continue
-            const point = new THREE.Vector3(ix * step, iy * step, iz * step)
-            const B = magneticField(point)
-            const mag = B.length()
-            if (mag < 0.0002) continue
-            B.normalize()
-            let len = Math.min(0.55, 0.12 + Math.log1p(mag * 40) * 0.12)
-            len *= 0.55 + strength * 0.7
-            const tip = point.clone().addScaledVector(B, len * 0.5)
-            const tail = point.clone().addScaledVector(B, -len * 0.5)
-            const geom = new THREE.BufferGeometry().setFromPoints([tail, tip])
-            const mat = new THREE.LineBasicMaterial({
-              color: FIELD_COLOR,
-              transparent: true,
-              opacity: 0.12 + Math.min(0.35, strength * 0.3),
-              blending: THREE.AdditiveBlending,
-              depthWrite: false
-            })
-            vectorGroup.add(new THREE.Line(geom, mat))
-          }
-        }
-      }
-    }
-
+    // Square bar magnet: rectangular block, red N / blue S halves
     function createMagnetMarkers() {
       magnetGroup.clear()
+
+      const halfLen = 0.28
+      const thick = 0.16
+      const wide = 0.16
+
       for (let i = 0; i < activeMagnets; i++) {
-        const cube = new THREE.Mesh(
-          new THREE.BoxGeometry(0.22, 0.22, 0.22),
-          new THREE.MeshBasicMaterial({
-            color: 0xf2f2f2,
-            transparent: true,
-            opacity: 0.92
-          })
-        )
-        const edges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(new THREE.BoxGeometry(0.22, 0.22, 0.22)),
-          new THREE.LineBasicMaterial({ color: 0xffcc88 })
-        )
-        const axisGeom = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, -0.32, 0),
-          new THREE.Vector3(0, 0.32, 0)
-        ])
-        const axis = new THREE.Line(
-          axisGeom,
-          new THREE.LineBasicMaterial({
-            color: 0xffaa66,
-            transparent: true,
-            opacity: 0.75
-          })
-        )
-        axis.name = "momentAxis"
         const marker = new THREE.Group()
-        marker.add(cube)
-        marker.add(edges)
-        marker.add(axis)
+
+        const north = new THREE.Mesh(
+          new THREE.BoxGeometry(wide, halfLen, thick),
+          new THREE.MeshBasicMaterial({ color: 0xc0392b })
+        )
+        north.position.y = halfLen * 0.5
+
+        const south = new THREE.Mesh(
+          new THREE.BoxGeometry(wide, halfLen, thick),
+          new THREE.MeshBasicMaterial({ color: 0x2980b9 })
+        )
+        south.position.y = -halfLen * 0.5
+
+        const outline = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(wide, halfLen * 2, thick)),
+          new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })
+        )
+
+        marker.add(north)
+        marker.add(south)
+        marker.add(outline)
         magnetGroup.add(marker)
       }
     }
@@ -626,194 +570,14 @@
         const magnet = magnets[i]
         if (magnet == null) continue
         marker.position.copy(magnet.p)
-        const axis = marker.getObjectByName("momentAxis")
-        if (axis != null) {
-          const dir = magnet.m.clone().normalize()
-          const quat = new THREE.Quaternion().setFromUnitVectors(
-            new THREE.Vector3(0, 1, 0),
-            dir
-          )
-          axis.setRotationFromQuaternion(quat)
-        }
+        // Align bar axis (local +Y) with magnetic moment
+        const dir = magnet.m.clone().normalize()
+        marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
       }
     }
 
     // ------------------------------------------------------------
-    // ELECTROMAGNETIC RADIATION
-    // Transverse wave: E ∥ ŷ, B ∥ ẑ, travel ∥ x̂
-    // E and B peak together: sin(kx − ωt)
-    // ------------------------------------------------------------
-
-    const WAVE_SAMPLES = 48
-    const WAVE_LEN = 10
-    const WAVE_X0 = -5
-    const eArrows = []
-    const bArrows = []
-    let eRibbon = null
-    let bRibbon = null
-    let propAxis = null
-
-    function makeArrow(color) {
-      const group = new THREE.Group()
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.018, 0.018, 1, 6),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.85,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        })
-      )
-      const head = new THREE.Mesh(
-        new THREE.ConeGeometry(0.055, 0.14, 8),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.9,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        })
-      )
-      head.position.y = 0.57
-      shaft.position.y = 0
-      group.add(shaft)
-      group.add(head)
-      group.userData.shaft = shaft
-      group.userData.head = head
-      return group
-    }
-
-    function buildEmWave() {
-      emWaveGroup.clear()
-      eArrows.length = 0
-      bArrows.length = 0
-
-      // Propagation axis
-      const axisGeom = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(WAVE_X0, 0, 0),
-        new THREE.Vector3(WAVE_X0 + WAVE_LEN, 0, 0)
-      ])
-      propAxis = new THREE.Line(
-        axisGeom,
-        new THREE.LineBasicMaterial({
-          color: 0x445566,
-          transparent: true,
-          opacity: 0.5
-        })
-      )
-      emWaveGroup.add(propAxis)
-
-      for (let i = 0; i < WAVE_SAMPLES; i++) {
-        const eA = makeArrow(0xffb060) // electric — warm
-        const bA = makeArrow(0x55ddff) // magnetic — cool
-        eArrows.push(eA)
-        bArrows.push(bA)
-        emWaveGroup.add(eA)
-        emWaveGroup.add(bA)
-      }
-
-      // Sinusoidal ribbons for the continuous field envelopes
-      const ePts = []
-      const bPts = []
-      for (let i = 0; i <= WAVE_SAMPLES; i++) {
-        ePts.push(new THREE.Vector3(0, 0, 0))
-        bPts.push(new THREE.Vector3(0, 0, 0))
-      }
-      eRibbon = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(ePts),
-        new THREE.LineBasicMaterial({
-          color: 0xffb060,
-          transparent: true,
-          opacity: 0.55,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        })
-      )
-      bRibbon = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(bPts),
-        new THREE.LineBasicMaterial({
-          color: 0x55ddff,
-          transparent: true,
-          opacity: 0.55,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        })
-      )
-      eRibbon.userData.pts = ePts
-      bRibbon.userData.pts = bPts
-      emWaveGroup.add(eRibbon)
-      emWaveGroup.add(bRibbon)
-
-      // Lift wave slightly so it reads against dipole field
-      emWaveGroup.position.set(0, 0, 0)
-      emWaveGroup.rotation.y = 0.15
-      emWaveGroup.rotation.z = -0.08
-    }
-
-    function setArrowFromTo(arrow, origin, tip) {
-      const dir = new THREE.Vector3().subVectors(tip, origin)
-      const len = dir.length()
-      if (len < 1e-4) {
-        arrow.visible = false
-        return
-      }
-      arrow.visible = true
-      dir.normalize()
-      arrow.position.copy(origin).addScaledVector(dir, len * 0.5)
-      arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
-      const shaft = arrow.userData.shaft
-      const head = arrow.userData.head
-      // Cylinder default height 1 along Y
-      shaft.scale.set(1, Math.max(0.05, len - 0.14), 1)
-      head.position.y = len * 0.5 - 0.02
-    }
-
-    function updateEmWave(now) {
-      // Amplitude grows with field amount (radiation strength), not color bleach
-      const amp = 0.55 + fieldAmount * 1.4
-      const k = (Math.PI * 2) / 3.2 // spatial frequency
-      const omega = 2.2 // rad/s — visible oscillation
-      const phase = now * 0.001 * omega
-
-      const ePts = eRibbon.userData.pts
-      const bPts = bRibbon.userData.pts
-
-      for (let i = 0; i < WAVE_SAMPLES; i++) {
-        const x = WAVE_X0 + (i / (WAVE_SAMPLES - 1)) * WAVE_LEN
-        // Perfect synchrony: same sin for E and B
-        const s = Math.sin(k * x - phase)
-        const Ey = amp * s
-        const Bz = amp * s // |B| ~ |E|/c in SI; here same visual amplitude
-
-        const origin = new THREE.Vector3(x, 0, 0)
-        const eTip = new THREE.Vector3(x, Ey, 0)
-        const bTip = new THREE.Vector3(x, 0, Bz)
-
-        setArrowFromTo(eArrows[i], origin, eTip)
-        setArrowFromTo(bArrows[i], origin, bTip)
-
-        ePts[i].set(x, Ey, 0)
-        bPts[i].set(x, 0, Bz)
-      }
-      ePts[WAVE_SAMPLES].copy(ePts[WAVE_SAMPLES - 1])
-      bPts[WAVE_SAMPLES].copy(bPts[WAVE_SAMPLES - 1])
-
-      eRibbon.geometry.setFromPoints(ePts)
-      bRibbon.geometry.setFromPoints(bPts)
-      eRibbon.geometry.attributes.position.needsUpdate = true
-      bRibbon.geometry.attributes.position.needsUpdate = true
-
-      // Opacity tracks radiation amount, stay chromatic (gold/cyan)
-      const op = 0.35 + Math.min(0.5, fieldAmount * 0.4)
-      eRibbon.material.opacity = op
-      bRibbon.material.opacity = op
-    }
-
-    buildEmWave()
-
-    // ------------------------------------------------------------
-    // MOUSE / LOOP
+    // LOOP
     // ------------------------------------------------------------
 
     let mouseX = 0
@@ -831,42 +595,27 @@
       updateFieldAmount()
       updateMagnetChoreography(now)
       syncMagnetMarkers()
-      updateEmWave(now)
       drawNoisyBorder(now)
 
       if (now - lastRebuild > REBUILD_MS) {
         rebuildField()
-        rebuildVectors()
         lastRebuild = now
       }
 
       const level = fieldAmount
       fieldGroup.rotation.y += 0.0012 + level * 0.0035
-      vectorGroup.rotation.y = fieldGroup.rotation.y
       magnetGroup.rotation.y = fieldGroup.rotation.y
-      // EM wave rotates more slowly so E/B axes stay readable
-      emWaveGroup.rotation.y = fieldGroup.rotation.y * 0.35 + 0.15
 
       const rx = mouseY * 0.4
       const rz = mouseX * 0.14
       fieldGroup.rotation.x = rx
       fieldGroup.rotation.z = rz
-      vectorGroup.rotation.x = rx
-      vectorGroup.rotation.z = rz
       magnetGroup.rotation.x = rx
       magnetGroup.rotation.z = rz
-      emWaveGroup.rotation.x = rx * 0.5 - 0.08
-      emWaveGroup.rotation.z = rz * 0.5
 
-      // Keep line opacity stable (no bleach-to-white)
       for (const tube of fieldGroup.children) {
         if (tube.material != null) {
           tube.material.opacity = 0.14 + Math.min(0.45, level * 0.35)
-        }
-      }
-      for (const line of vectorGroup.children) {
-        if (line.material != null) {
-          line.material.opacity = 0.12 + Math.min(0.35, level * 0.3)
         }
       }
 
@@ -882,7 +631,6 @@
     updateMagnetChoreography(performance.now())
     updateFieldAmount()
     rebuildField()
-    rebuildVectors()
     createMagnetMarkers()
     syncMagnetMarkers()
     requestAnimationFrame(tick)
