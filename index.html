@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Electromagnetic Field — Hydra</title>
+  <meta name="description" content="3D magnetic dipole field for Hydra: mic-driven field amount + 4-minute magnet choreography." />
+  <style>
+    :root {
+      --bg0: #04060a;
+      --bg1: #0a1220;
+      --cyan: #6ec8ff;
+      --ink: #d7e7f5;
+      --muted: #7f93a8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(1200px 700px at 20% 0%, #123055 0%, transparent 55%),
+        radial-gradient(900px 600px at 90% 80%, #0c2a28 0%, transparent 50%),
+        linear-gradient(160deg, var(--bg0), var(--bg1));
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 4.5rem 1.25rem 3rem;
+    }
+    h1 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(2rem, 5vw, 2.75rem);
+      letter-spacing: -0.02em;
+      margin: 0 0 0.75rem;
+      line-height: 1.15;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.55;
+      margin: 0 0 2rem;
+      max-width: 36rem;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.85rem 1.25rem;
+      border-radius: 2px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    a.btn:hover { transform: translateY(-1px); }
+    a.btn-primary {
+      background: var(--cyan);
+      color: #041018;
+    }
+    a.btn-ghost {
+      border: 1px solid #2a3d55;
+      color: var(--ink);
+      background: rgba(255,255,255,0.03);
+    }
+    section {
+      border-top: 1px solid #1c2a3d;
+      padding-top: 1.5rem;
+      margin-top: 0.5rem;
+    }
+    h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+      font-weight: 600;
+    }
+    ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--ink);
+      line-height: 1.6;
+    }
+    code, pre {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.82rem;
+    }
+    pre {
+      background: rgba(0,0,0,0.45);
+      border: 1px solid #1c2a3d;
+      padding: 1rem;
+      overflow-x: auto;
+      line-height: 1.45;
+      color: #b8d4ef;
+    }
+    .meta {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .meta a { color: var(--cyan); }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <main>
+    <h1>Electromagnetic Field</h1>
+    <p class="lede">
+      3D magnetic dipoles for <a href="https://hydra.ojack.xyz" style="color:var(--cyan)">Hydra</a>:
+      microphone energy drives field amount; magnets move on a 4‑minute loop
+      (cluster → split → orbit → two groups).
+    </p>
+
+    <div class="actions">
+      <a class="btn btn-primary" id="open-hydra" href="#">Open in Hydra</a>
+      <a class="btn btn-ghost" href="https://github.com/egrojMonroy/hydra-electromagnetic-field">Source on GitHub</a>
+    </div>
+
+    <section>
+      <h2>Controls</h2>
+      <ul>
+        <li><strong>1–4</strong> — active magnets</li>
+        <li><strong>Mouse</strong> — tilt the field</li>
+        <li><strong>Mic</strong> — field strength / density (allow when prompted)</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Or paste into Hydra</h2>
+      <pre id="snippet">await loadScript("https://cdn.jsdelivr.net/gh/egrojMonroy/hydra-electromagnetic-field@main/electromagneticfield.js")</pre>
+    </section>
+
+    <p class="meta">
+      Hosted on GitHub Pages ·
+      <a href="electromagneticfield.js">raw patch</a> ·
+      inspired by
+      <a href="https://web.mit.edu/8.02t/www/802TEAL3D/visualizations/guidedtour/Tour.htm">MIT TEAL</a>
+      /
+      <a href="https://math.nist.gov/mcsd/savg/vis/emfields/index.html">NIST EM viz</a>
+    </p>
+  </main>
+  <script>
+    const patch = `// Electromagnetic Field — 3D magnetic dipoles for Hydra
+// Audio (mic) = field amount | 4-min magnet choreography | keys 1–4 | mouse tilt
+await loadScript("https://cdn.jsdelivr.net/gh/egrojMonroy/hydra-electromagnetic-field@main/electromagneticfield.js")`
+
+    // Hydra loads sketches from ?code= base64(uri-encoded source)
+    const hydraUrl =
+      "https://hydra.ojack.xyz/?code=" +
+      encodeURIComponent(btoa(unescape(encodeURIComponent(patch))))
+
+    const link = document.getElementById("open-hydra")
+    link.href = hydraUrl
+  </script>
+</body>
+</html>
