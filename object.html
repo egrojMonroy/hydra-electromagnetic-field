@@ -250,7 +250,34 @@
     const root = new THREE.Group()
     scene.add(root)
     let model = null
-    const baseEmissive = []
+
+    const texLoader = new THREE.TextureLoader()
+    const colorTex = texLoader.load(
+      "object-color.jpg",
+      () => {
+        colorTex.colorSpace = THREE.SRGBColorSpace
+        colorTex.flipY = false
+        colorTex.needsUpdate = true
+        statusEl.textContent = ""
+      },
+      undefined,
+      () => {
+        statusEl.textContent = "Color texture missing — check object-color.jpg"
+      }
+    )
+    colorTex.colorSpace = THREE.SRGBColorSpace
+    colorTex.flipY = false
+    colorTex.wrapS = THREE.RepeatWrapping
+    colorTex.wrapT = THREE.RepeatWrapping
+
+    const painted = new THREE.MeshStandardMaterial({
+      map: colorTex,
+      metalness: 0.0,
+      roughness: 0.7,
+      envMapIntensity: 0.4,
+      emissive: new THREE.Color(0x000000),
+      emissiveIntensity: 0
+    })
 
     const loader = new GLTFLoader()
     loader.load(
@@ -261,20 +288,9 @@
           if (obj.isMesh != null && obj.isMesh) {
             obj.castShadow = false
             obj.receiveShadow = false
-            if (obj.material != null) {
-              const mats = Array.isArray(obj.material)
-                ? obj.material
-                : [obj.material]
-              for (const m of mats) {
-                if (m.emissive != null) {
-                  baseEmissive.push({
-                    mat: m,
-                    color: m.emissive.clone(),
-                    inten: m.emissiveIntensity ?? 0
-                  })
-                }
-              }
-            }
+            // Force painted texture (embedded GLB maps were reading as white)
+            obj.material = painted
+            obj.material.needsUpdate = true
           }
         })
         root.add(model)
@@ -289,11 +305,12 @@
       (err) => {
         console.error(err)
         statusEl.textContent = "Failed to load object.glb"
+        errEl.textContent = String(err)
       }
     )
 
     // ------------------------------------------------------------
-    // LOOP
+    // LOOP — slow motion
     // ------------------------------------------------------------
 
     function tick(now) {
@@ -302,23 +319,18 @@
       controls.update()
 
       if (model != null) {
-        const s = 1 + eBass * 0.55
+        // Gentle scale / spin (was too fast)
+        const s = 1 + eBass * 0.18
         root.scale.setScalar(s)
-        root.rotation.y += 0.004 + eMid * 0.04
-        root.rotation.x = Math.sin(now * 0.0004) * 0.08 + eHigh * 0.05
-        root.position.y = Math.sin(now * 0.0012) * 0.04 * eMid
+        root.rotation.y += 0.0007 + eMid * 0.006
+        root.rotation.x = Math.sin(now * 0.00025) * 0.04
+        root.position.y = Math.sin(now * 0.0006) * 0.025 * (0.3 + eMid)
 
-        const glow = eHigh * 0.85 + eBass * 0.25
-        for (const item of baseEmissive) {
-          item.mat.emissive.setRGB(
-            item.color.r + glow * 0.35,
-            item.color.g + glow * 0.55,
-            item.color.b + glow * 0.9
-          )
-          item.mat.emissiveIntensity = item.inten + glow * 1.4
-        }
+        // Subtle shimmer — keep color visible (no wash to white)
+        painted.emissive.setRGB(0.02 + eHigh * 0.08, 0.03 + eHigh * 0.1, 0.05 + eHigh * 0.12)
+        painted.emissiveIntensity = eHigh * 0.35
 
-        renderer.toneMappingExposure = 1.05 + eBass * 0.35
+        renderer.toneMappingExposure = 1.15 + eBass * 0.12
       }
 
       renderer.render(scene, camera)
