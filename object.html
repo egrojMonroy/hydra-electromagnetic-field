@@ -87,9 +87,15 @@
       pointer-events: none;
     }
   </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2305060a' width='32' height='32'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236ec8ff'/%3E%3C/svg%3E" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <div id="status">Loading model…</div>
@@ -104,6 +110,7 @@
         <button id="start" type="button">Start microphone</button>
         <a class="btn" href="index.html">Home</a>
       </div>
+      <p id="err" style="color:#ff8a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
     </div>
   </div>
   <div id="hud">
@@ -111,14 +118,14 @@
   </div>
 
   <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.163.0/build/three.module.js"
-    import { OrbitControls } from "https://unpkg.com/three@0.163.0/examples/jsm/controls/OrbitControls.js"
-    import { GLTFLoader } from "https://unpkg.com/three@0.163.0/examples/jsm/loaders/GLTFLoader.js"
-    import { RoomEnvironment } from "https://unpkg.com/three@0.163.0/examples/jsm/environments/RoomEnvironment.js"
+    import * as THREE from "three"
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js"
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 
     const statusEl = document.getElementById("status")
     const ui = document.getElementById("ui")
     const hud = document.getElementById("hud")
+    const errEl = document.getElementById("err")
 
     // ------------------------------------------------------------
     // SCENE
@@ -146,15 +153,12 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace
     document.body.appendChild(renderer.domElement)
 
-    const pmrem = new THREE.PMREMGenerator(renderer)
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-
     // Soft fill so the model is visible before mic starts
-    const fill = new THREE.AmbientLight(0xffffff, 0.35)
+    const fill = new THREE.AmbientLight(0xffffff, 0.45)
     scene.add(fill)
-    const hemi = new THREE.HemisphereLight(0xb8d4ff, 0x1a120c, 0.85)
+    const hemi = new THREE.HemisphereLight(0xb8d4ff, 0x1a120c, 0.95)
     scene.add(hemi)
-    const key = new THREE.DirectionalLight(0xffffff, 1.1)
+    const key = new THREE.DirectionalLight(0xffffff, 1.25)
     key.position.set(3, 5, 2)
     scene.add(key)
 
@@ -323,17 +327,23 @@
     requestAnimationFrame(tick)
 
     document.getElementById("start").addEventListener("click", async () => {
+      errEl.textContent = ""
       try {
         await startMic()
         if (audioCtx != null && audioCtx.state === "suspended") {
           await audioCtx.resume()
         }
+        ui.classList.add("hidden")
+        hud.classList.add("show")
       } catch (err) {
         console.warn("Mic unavailable:", err)
-        statusEl.textContent = "Mic blocked — model still animates gently"
+        errEl.textContent =
+          "Microphone blocked or unavailable. Check Safari settings → Microphone."
+        // Still enter the scene so the model is usable
+        ui.classList.add("hidden")
+        hud.classList.add("show")
+        statusEl.textContent = "Running without mic"
       }
-      ui.classList.add("hidden")
-      hud.classList.add("show")
     })
   </script>
 </body>
