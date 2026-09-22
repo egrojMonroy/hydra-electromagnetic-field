@@ -116,6 +116,26 @@
       from { background-position: 0 0; }
       to { background-position: 0 48px; }
     }
+    #mic-panel {
+      position: fixed;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 7.5rem;
+      padding: 0.55rem 0.6rem;
+      background: rgba(8, 12, 18, 0.72);
+      border: 1px solid rgba(80, 110, 140, 0.35);
+      font-size: 0.65rem;
+      color: #9bb0c4;
+      line-height: 1.35;
+      display: none;
+    }
+    #mic-panel.open { display: block; }
+    #mic-panel label { display: block; margin-bottom: 0.25rem; }
+    #mic-panel input[type="range"] { width: 100%; accent-color: #6ec8ff; }
+    #mic-panel .val { opacity: 0.85; margin-top: 0.15rem; }
+    #mic-panel .hint { opacity: 0.55; margin-top: 0.35rem; font-size: 0.58rem; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -144,22 +164,54 @@
   </div>
   <div id="hud">
     1–4 magnets · mouse tilt · bass → field joins<br />
-    sparse atmosphere = depth cue (not audio-reactive)
+    press <b>M</b> for mic sensitivity (hide for concert)
   </div>
+
+  <aside id="mic-panel" aria-label="Microphone sensitivity">
+    <label for="mic-gain">Mic sensitivity</label>
+    <input id="mic-gain" type="range" min="0.5" max="12" step="0.1" value="3" />
+    <div class="val">gain <span id="mic-gain-val">3.0</span>×</div>
+    <div class="hint">M hide/show · iPad often needs higher</div>
+  </aside>
 
   <script type="module">
     import * as THREE from "https://unpkg.com/three@0.163.0/build/three.module.js"
 
-    // (Hydra link removed from UI — use Home for navigation)
-
     // ------------------------------------------------------------
-    // AUDIO — bass = field, highs = atmosphere
+    // AUDIO
     // ------------------------------------------------------------
 
     const fftBins = new Float32Array(8)
     let audioCtx = null
     let analyser = null
     let freqData = null
+    let micGainNode = null
+
+    let micSensitivity = Number(localStorage.getItem("hydraMicGain") ?? 3)
+    if (Number.isNaN(micSensitivity)) micSensitivity = 3
+
+    const micPanel = document.getElementById("mic-panel")
+    const micGainInput = document.getElementById("mic-gain")
+    const micGainVal = document.getElementById("mic-gain-val")
+    micGainInput.value = String(micSensitivity)
+    micGainVal.textContent = micSensitivity.toFixed(1)
+
+    function applyMicGain(v) {
+      micSensitivity = v
+      if (micGainNode != null) micGainNode.gain.value = v
+      micGainVal.textContent = v.toFixed(1)
+      localStorage.setItem("hydraMicGain", String(v))
+    }
+
+    micGainInput.addEventListener("input", () => {
+      applyMicGain(Number(micGainInput.value))
+    })
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "m" || e.key === "M") {
+        micPanel.classList.toggle("open")
+      }
+    })
 
     async function startMic() {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -172,14 +224,13 @@
       })
       audioCtx = new AudioContext()
       const source = audioCtx.createMediaStreamSource(stream)
-      // Preamp — iPad / quiet built-in mics need more gain
-      const micGain = audioCtx.createGain()
-      micGain.gain.value = 4.5
+      micGainNode = audioCtx.createGain()
+      micGainNode.gain.value = micSensitivity
       analyser = audioCtx.createAnalyser()
       analyser.fftSize = 512
-      analyser.smoothingTimeConstant = 0.72
-      source.connect(micGain)
-      micGain.connect(analyser)
+      analyser.smoothingTimeConstant = 0.78
+      source.connect(micGainNode)
+      micGainNode.connect(analyser)
       freqData = new Uint8Array(analyser.frequencyBinCount)
     }
 
@@ -188,14 +239,14 @@
       analyser.getByteFrequencyData(freqData)
       const n = freqData.length
       const per = Math.floor(n / 8)
+      const scale = 1.2 + micSensitivity * 0.35
       for (let i = 0; i < 8; i++) {
         let sum = 0
         const start = i * per
         const end = i === 7 ? n : start + per
         for (let j = start; j < end; j++) sum += freqData[j]
-        // Aggressive scale for iPad sensitivity
-        const next = Math.min(3.8, ((sum / (end - start)) / 255) * 4.5)
-        fftBins[i] += (next - fftBins[i]) * 0.45
+        const next = Math.min(3.8, ((sum / (end - start)) / 255) * scale)
+        fftBins[i] += (next - fftBins[i]) * 0.4
       }
     }
 
