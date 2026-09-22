@@ -114,7 +114,7 @@
     </div>
   </div>
   <div id="hud">
-    quiet = Beethoven · loud = interference<br />
+    quiet = Beethoven · loud = interference · swims like a fish<br />
     bass→X · mids→Y · highs→Z · atmosphere depth lines
   </div>
 
@@ -460,13 +460,24 @@
     )
 
     // ------------------------------------------------------------
-    // LOOP — 3 axes from bass/mid/high, never zero speed
+    // LOOP — fish wander + band→axis spin + interference blend
     // ------------------------------------------------------------
 
-    // Minimum angular speeds (rad/frame-ish) so axes never stop
+    // Minimum angular speeds so axes never stop
     const MIN_X = 0.00035
     const MIN_Y = 0.00045
     const MIN_Z = 0.0003
+
+    // Fish swim state (smooth wander, never glued to center)
+    const fish = {
+      x: 0,
+      y: 0.1,
+      z: 0,
+      vx: 0.004,
+      vy: 0.002,
+      vz: -0.003,
+      heading: 0
+    }
 
     function tick(now) {
       const t = now * 0.001
@@ -481,11 +492,9 @@
       uniforms.uSignal.value = eSignal
 
       if (model != null) {
-        // Slight scale only when signal rises
         const s = 1 + eBass * 0.12 * eSignal
         root.scale.setScalar(s)
 
-        // Each band paces one axis; floor keeps motion alive when quiet
         const spdX = MIN_X + eBass * 0.0045
         const spdY = MIN_Y + eMid * 0.0055
         const spdZ = MIN_Z + eHigh * 0.004
@@ -493,13 +502,71 @@
         root.rotation.y += spdY
         root.rotation.z += spdZ
 
-        root.position.x = Math.sin(t * 0.2) * 0.05 * (0.25 + eMid)
-        root.position.y = Math.sin(t * 0.27) * 0.04 * (0.25 + eBass)
-        root.position.z = Math.cos(t * 0.17) * 0.035 * (0.25 + eHigh)
+        // --- Fish-like swim around the scene ---
+        // Slow steering forces (Lissajous + soft bounds)
+        const ax =
+          Math.sin(t * 0.31) * 0.00009 +
+          Math.sin(t * 0.17 + 1.7) * 0.00005 +
+          eMid * 0.00002
+        const ay =
+          Math.cos(t * 0.27) * 0.00007 +
+          Math.sin(t * 0.41 + 0.5) * 0.00004 +
+          eBass * 0.000015
+        const az =
+          Math.sin(t * 0.23 + 2.1) * 0.00008 +
+          Math.cos(t * 0.19) * 0.000045 +
+          eHigh * 0.000018
+
+        fish.vx += ax
+        fish.vy += ay
+        fish.vz += az
+
+        // Soft speed limit (calm fish, louder = slightly livelier)
+        const maxSpd = 0.012 + eSignal * 0.01
+        const spd = Math.hypot(fish.vx, fish.vy, fish.vz) || 0.0001
+        if (spd > maxSpd) {
+          const k = maxSpd / spd
+          fish.vx *= k
+          fish.vy *= k
+          fish.vz *= k
+        }
+
+        fish.x += fish.vx
+        fish.y += fish.vy
+        fish.z += fish.vz
+
+        // Soft aquarium bounds — turn back before leaving the frame
+        const bx = 1.6
+        const by = 1.0
+        const bz = 1.1
+        if (fish.x > bx) fish.vx -= 0.00035
+        if (fish.x < -bx) fish.vx += 0.00035
+        if (fish.y > by) fish.vy -= 0.0003
+        if (fish.y < -by * 0.6) fish.vy += 0.0003
+        if (fish.z > bz) fish.vz -= 0.0003
+        if (fish.z < -bz) fish.vz += 0.0003
+
+        // Gentle damping so paths stay curved, not jittery
+        fish.vx *= 0.995
+        fish.vy *= 0.995
+        fish.vz *= 0.995
+
+        root.position.set(fish.x, fish.y, fish.z)
+
+        // Nose slightly follows swim direction (fish heading)
+        const targetHeading = Math.atan2(fish.vx, fish.vz)
+        fish.heading += (targetHeading - fish.heading) * 0.04
+        // Blend heading into Y so he banks through the tank
+        root.rotation.y += (fish.heading * 0.15 - root.rotation.y * 0.002)
       }
 
-      atmosphereGroup.rotation.y = root.rotation.y * 0.25
-      atmosphereGroup.rotation.x = root.rotation.x * 0.15
+      atmosphereGroup.rotation.y = root.rotation.y * 0.2
+      atmosphereGroup.rotation.x = root.rotation.x * 0.12
+
+      // Keep camera looking near the fish so he stays on-page
+      controls.target.x += (fish.x * 0.35 - controls.target.x) * 0.02
+      controls.target.y += (fish.y * 0.35 + 0.1 - controls.target.y) * 0.02
+      controls.target.z += (fish.z * 0.25 - controls.target.z) * 0.02
 
       renderer.toneMappingExposure = 1.12 + eBass * 0.06 * eSignal
       renderer.render(scene, camera)
