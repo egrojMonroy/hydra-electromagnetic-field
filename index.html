@@ -135,6 +135,7 @@
       </p>
       <div class="actions">
         <button id="start" type="button">Start here</button>
+        <a class="btn btn-hydra" href="object.html">Object (sound)</a>
         <a id="open-hydra" class="btn btn-hydra" href="#">Open in Hydra</a>
       </div>
       <p class="note">
@@ -169,16 +170,20 @@
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: false
+          autoGainControl: true
         },
         video: false
       })
       audioCtx = new AudioContext()
       const source = audioCtx.createMediaStreamSource(stream)
+      // Preamp — iPad / quiet built-in mics need more gain
+      const micGain = audioCtx.createGain()
+      micGain.gain.value = 4.5
       analyser = audioCtx.createAnalyser()
       analyser.fftSize = 512
-      analyser.smoothingTimeConstant = 0.85
-      source.connect(analyser)
+      analyser.smoothingTimeConstant = 0.72
+      source.connect(micGain)
+      micGain.connect(analyser)
       freqData = new Uint8Array(analyser.frequencyBinCount)
     }
 
@@ -192,9 +197,9 @@
         const start = i * per
         const end = i === 7 ? n : start + per
         for (let j = start; j < end; j++) sum += freqData[j]
-        // Stronger scale so mic clearly moves the field
-        const next = ((sum / (end - start)) / 255) * 3.2
-        fftBins[i] += (next - fftBins[i]) * 0.4
+        // Aggressive scale for iPad sensitivity
+        const next = Math.min(3.8, ((sum / (end - start)) / 255) * 4.5)
+        fftBins[i] += (next - fftBins[i]) * 0.45
       }
     }
 

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Object — sound reactive</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05070c;
+      color: #d7e7f5;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    #ui {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 10;
+      text-align: center;
+      padding: 1.5rem;
+      background:
+        radial-gradient(800px 480px at 30% 20%, #1a3055aa, transparent 55%),
+        #05070cee;
+    }
+    #ui.hidden { display: none; }
+    h1 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      margin: 0 0 0.5rem;
+    }
+    p {
+      color: #8aa3ba;
+      max-width: 28rem;
+      margin: 0 auto 1.2rem;
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      justify-content: center;
+    }
+    button, a.btn {
+      border: 0;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 0.85rem 1.2rem;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+    }
+    #start { background: #6ec8ff; color: #041018; }
+    a.btn {
+      border: 1px solid #2a3d55;
+      color: #cfe6f8;
+      background: transparent;
+    }
+    #hud {
+      position: fixed;
+      left: 1rem;
+      bottom: 1rem;
+      z-index: 5;
+      font-size: 0.75rem;
+      color: #7f93a8;
+      opacity: 0;
+      transition: opacity 0.3s;
+      line-height: 1.45;
+      pointer-events: none;
+    }
+    #hud.show { opacity: 1; }
+    #status {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 6;
+      font-size: 0.8rem;
+      color: #8aa3ba;
+      pointer-events: none;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="status">Loading model…</div>
+  <div id="ui">
+    <div>
+      <h1>Sound-reactive object</h1>
+      <p>
+        Alternative view of your USDZ mesh (as GLB for the web).
+        Mic drives scale, glow, and spin — electromagnetic field stays on the main page.
+      </p>
+      <div class="actions">
+        <button id="start" type="button">Start with mic</button>
+        <a class="btn" href="index.html">Electromagnetic field</a>
+        <a class="btn" id="ar-link" rel="ar" href="16_9_2026.usdz">AR (iOS USDZ)</a>
+      </div>
+    </div>
+  </div>
+  <div id="hud">
+    drag to orbit · bass → size · mids → spin · highs → shimmer<br />
+    iPad: hold phone near mic / speak closer for stronger response
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.163.0/build/three.module.js"
+    import { OrbitControls } from "https://unpkg.com/three@0.163.0/examples/jsm/controls/OrbitControls.js"
+    import { GLTFLoader } from "https://unpkg.com/three@0.163.0/examples/jsm/loaders/GLTFLoader.js"
+    import { RoomEnvironment } from "https://unpkg.com/three@0.163.0/examples/jsm/environments/RoomEnvironment.js"
+
+    const statusEl = document.getElementById("status")
+    const ui = document.getElementById("ui")
+    const hud = document.getElementById("hud")
+
+    // ------------------------------------------------------------
+    // SCENE
+    // ------------------------------------------------------------
+
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color(0x05070c)
+
+    const camera = new THREE.PerspectiveCamera(
+      40,
+      window.innerWidth / window.innerHeight,
+      0.05,
+      100
+    )
+    camera.position.set(0, 0.6, 4.2)
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance"
+    })
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.15
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    document.body.appendChild(renderer.domElement)
+
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+
+    const hemi = new THREE.HemisphereLight(0xb8d4ff, 0x1a120c, 0.85)
+    scene.add(hemi)
+    const key = new THREE.DirectionalLight(0xffffff, 1.1)
+    key.position.set(3, 5, 2)
+    scene.add(key)
+
+    const controls = new OrbitControls(camera, renderer.domElement)
+    controls.enableDamping = true
+    controls.dampingFactor = 0.06
+    controls.minDistance = 1.2
+    controls.maxDistance = 10
+    controls.target.set(0, 0.15, 0)
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+    })
+
+    // ------------------------------------------------------------
+    // AUDIO — boosted for iPad / quiet mics
+    // ------------------------------------------------------------
+
+    const fftBins = new Float32Array(8)
+    let audioCtx = null
+    let analyser = null
+    let freqData = null
+    let micGain = null
+
+    async function startMic() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true // helps iPad quiet input
+        },
+        video: false
+      })
+      audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      micGain = audioCtx.createGain()
+      // Extra preamp for iPad / laptop mics
+      micGain.gain.value = 4.5
+      analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.72
+      source.connect(micGain)
+      micGain.connect(analyser)
+      freqData = new Uint8Array(analyser.frequencyBinCount)
+    }
+
+    function sampleFft() {
+      if (analyser == null || freqData == null) return
+      analyser.getByteFrequencyData(freqData)
+      const n = freqData.length
+      const per = Math.floor(n / 8)
+      for (let i = 0; i < 8; i++) {
+        let sum = 0
+        const start = i * per
+        const end = i === 7 ? n : start + per
+        for (let j = start; j < end; j++) sum += freqData[j]
+        // Aggressive scale for iPad
+        const next = Math.min(3.5, ((sum / (end - start)) / 255) * 4.5)
+        fftBins[i] += (next - fftBins[i]) * 0.45
+      }
+    }
+
+    function bass() {
+      return fftBins[0] * 0.5 + fftBins[1] * 0.35 + fftBins[2] * 0.15
+    }
+    function mids() {
+      return fftBins[2] * 0.25 + fftBins[3] * 0.4 + fftBins[4] * 0.35
+    }
+    function highs() {
+      return fftBins[5] * 0.3 + fftBins[6] * 0.4 + fftBins[7] * 0.3
+    }
+
+    let eBass = 0.2
+    let eMid = 0.15
+    let eHigh = 0.1
+
+    function updateEnvelopes() {
+      eBass += (0.12 + bass() * 1.4 - eBass) * 0.3
+      eMid += (0.1 + mids() * 1.2 - eMid) * 0.28
+      eHigh += (0.08 + highs() * 1.3 - eHigh) * 0.35
+    }
+
+    // ------------------------------------------------------------
+    // MODEL
+    // ------------------------------------------------------------
+
+    const root = new THREE.Group()
+    scene.add(root)
+    let model = null
+    const baseEmissive = []
+
+    const loader = new GLTFLoader()
+    loader.load(
+      "object.glb",
+      (gltf) => {
+        model = gltf.scene
+        model.traverse((obj) => {
+          if (obj.isMesh != null && obj.isMesh) {
+            obj.castShadow = false
+            obj.receiveShadow = false
+            if (obj.material != null) {
+              const mats = Array.isArray(obj.material)
+                ? obj.material
+                : [obj.material]
+              for (const m of mats) {
+                if (m.emissive != null) {
+                  baseEmissive.push({
+                    mat: m,
+                    color: m.emissive.clone(),
+                    inten: m.emissiveIntensity ?? 0
+                  })
+                }
+              }
+            }
+          }
+        })
+        root.add(model)
+        statusEl.textContent = ""
+      },
+      (ev) => {
+        if (ev.total > 0) {
+          statusEl.textContent =
+            "Loading model… " + Math.round((100 * ev.loaded) / ev.total) + "%"
+        }
+      },
+      (err) => {
+        console.error(err)
+        statusEl.textContent = "Failed to load object.glb"
+      }
+    )
+
+    // ------------------------------------------------------------
+    // LOOP
+    // ------------------------------------------------------------
+
+    function tick(now) {
+      sampleFft()
+      updateEnvelopes()
+      controls.update()
+
+      if (model != null) {
+        const s = 1 + eBass * 0.55
+        root.scale.setScalar(s)
+        root.rotation.y += 0.004 + eMid * 0.04
+        root.rotation.x = Math.sin(now * 0.0004) * 0.08 + eHigh * 0.05
+        root.position.y = Math.sin(now * 0.0012) * 0.04 * eMid
+
+        const glow = eHigh * 0.85 + eBass * 0.25
+        for (const item of baseEmissive) {
+          item.mat.emissive.setRGB(
+            item.color.r + glow * 0.35,
+            item.color.g + glow * 0.55,
+            item.color.b + glow * 0.9
+          )
+          item.mat.emissiveIntensity = item.inten + glow * 1.4
+        }
+
+        renderer.toneMappingExposure = 1.05 + eBass * 0.35
+      }
+
+      renderer.render(scene, camera)
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+
+    document.getElementById("start").addEventListener("click", async () => {
+      try {
+        await startMic()
+        if (audioCtx != null && audioCtx.state === "suspended") {
+          await audioCtx.resume()
+        }
+      } catch (err) {
+        console.warn("Mic unavailable:", err)
+        statusEl.textContent = "Mic blocked — model still animates gently"
+      }
+      ui.classList.add("hidden")
+      hud.classList.add("show")
+    })
+  </script>
+</body>
+</html>
