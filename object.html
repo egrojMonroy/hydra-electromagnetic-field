@@ -143,10 +143,17 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.35
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    document.body.appendChild(renderer.domElement)
+
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
 
     // Soft fill so the model is visible before mic starts
     const fill = new THREE.AmbientLight(0xffffff, 0.35)
     scene.add(fill)
+    const hemi = new THREE.HemisphereLight(0xb8d4ff, 0x1a120c, 0.85)
+    scene.add(hemi)
     const key = new THREE.DirectionalLight(0xffffff, 1.1)
     key.position.set(3, 5, 2)
     scene.add(key)
