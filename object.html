@@ -103,8 +103,8 @@
     <div>
       <h1>Object</h1>
       <p>
-        Sound drives TV / seismic interference on the texture (not white glow),
-        slow 3‑axis motion, and a sparse atmosphere of field lines.
+        Quiet mic → clear Beethoven. Louder → TV / seismic interference.
+        Bass / mids / highs drive X / Y / Z spin (never fully stops).
       </p>
       <div class="actions">
         <button id="start" type="button">Start microphone</button>
@@ -114,8 +114,8 @@
     </div>
   </div>
   <div id="hud">
-    drag to orbit · mic → TV/seismic interference · 3‑axis drift<br />
-    atmosphere lines = depth (same idea as the EM field)
+    quiet = Beethoven · loud = interference<br />
+    bass→X · mids→Y · highs→Z · atmosphere depth lines
   </div>
 
   <script type="module">
@@ -224,19 +224,25 @@
       return fftBins[5] * 0.3 + fftBins[6] * 0.4 + fftBins[7] * 0.3
     }
 
-    let eBass = 0.15
-    let eMid = 0.12
-    let eHigh = 0.1
+    let eBass = 0.12
+    let eMid = 0.1
+    let eHigh = 0.08
+    // Overall "how interfered" — 0 = pure Beethoven, 1 = full TV/seismic
+    let eSignal = 0
 
     function updateEnvelopes() {
-      eBass += (0.1 + bass() * 1.35 - eBass) * 0.28
-      eMid += (0.08 + mids() * 1.15 - eMid) * 0.26
-      eHigh += (0.06 + highs() * 1.25 - eHigh) * 0.32
+      eBass += (0.08 + bass() * 1.35 - eBass) * 0.28
+      eMid += (0.06 + mids() * 1.15 - eMid) * 0.26
+      eHigh += (0.05 + highs() * 1.25 - eHigh) * 0.32
+      const raw =
+        eBass * 0.45 + eMid * 0.3 + eHigh * 0.25
+      // Soft knee so quiet stays readable longer
+      const target = Math.max(0, Math.min(1, (raw - 0.18) / 1.1))
+      eSignal += (target - eSignal) * 0.22
     }
 
     // ------------------------------------------------------------
-    // TV / SEISMIC INTERFERENCE SHADER (no white wash)
-    // phosphor green + amber tear lines + chroma skew
+    // SHADER: clean Beethoven ↔ interference by eSignal
     // ------------------------------------------------------------
 
     const uniforms = {
@@ -244,7 +250,8 @@
       uTime: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
-      uHigh: { value: 0 }
+      uHigh: { value: 0 },
+      uSignal: { value: 0 }
     }
 
     const interferenceMat = new THREE.ShaderMaterial({
@@ -257,18 +264,17 @@
         uniform float uBass;
         uniform float uMid;
         uniform float uHigh;
+        uniform float uSignal;
 
         void main() {
           vUv = uv;
           vec3 p = position;
-          // Earthquake-style micro tremor on the mesh (all axes)
-          float t = uTime;
-          float shake = uBass * 0.045 + uHigh * 0.02;
-          p.x += sin(t * 9.0 + position.y * 12.0) * shake;
-          p.y += cos(t * 11.0 + position.x * 10.0) * shake * 0.85;
-          p.z += sin(t * 13.0 + position.x * 8.0 + position.y * 6.0) * shake * 0.7;
-          // Slow seismic swell
-          p += normal * (sin(t * 2.2 + position.y * 3.0) * uMid * 0.02);
+          // Tremor only when signal is present
+          float shake = (uBass * 0.045 + uHigh * 0.02) * uSignal;
+          p.x += sin(uTime * 9.0 + position.y * 12.0) * shake;
+          p.y += cos(uTime * 11.0 + position.x * 10.0) * shake * 0.85;
+          p.z += sin(uTime * 13.0 + position.x * 8.0 + position.y * 6.0) * shake * 0.7;
+          p += normal * (sin(uTime * 2.2 + position.y * 3.0) * uMid * 0.02 * uSignal);
           vPos = p;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
@@ -279,6 +285,7 @@
         uniform float uBass;
         uniform float uMid;
         uniform float uHigh;
+        uniform float uSignal;
         varying vec2 vUv;
         varying vec3 vPos;
 
@@ -287,26 +294,26 @@
         }
 
         void main() {
-          // Seismic / VHS horizontal tear (UV wobble)
+          // Clean Beethoven sample
+          vec3 clean = texture2D(uMap, vUv).rgb;
+
+          // --- interfered path ---
           float tear = sin(vUv.y * 40.0 + uTime * 6.0) * uBass * 0.012
                      + sin(vUv.y * 120.0 - uTime * 14.0) * uHigh * 0.008;
           float roll = fract(uTime * (0.05 + uMid * 0.15)) * uMid * 0.04;
-          vec2 uv = vUv + vec2(tear, roll);
+          vec2 uv = vUv + vec2(tear, roll) * uSignal;
 
-          // RGB channel split like bad TV reception (tinted, not white)
-          float aberr = uHigh * 0.006 + uBass * 0.003;
+          float aberr = (uHigh * 0.006 + uBass * 0.003) * uSignal;
           float r = texture2D(uMap, uv + vec2(aberr, 0.0)).r;
           float g = texture2D(uMap, uv).g;
           float b = texture2D(uMap, uv - vec2(aberr, 0.0)).b;
           vec3 col = vec3(r, g, b);
 
-          // CRT scanlines
           float scan = 0.88 + 0.12 * sin((vUv.y + uTime * 0.02) * 900.0);
-          col *= scan;
+          col *= mix(1.0, scan, uSignal);
 
-          // Interference snow — phosphor green / amber (avoid white)
           float n = hash(vec2(vUv.x * 220.0, vUv.y * 180.0 + floor(uTime * 18.0)));
-          float snowAmt = uHigh * 0.55 + uBass * 0.15;
+          float snowAmt = (uHigh * 0.55 + uBass * 0.15) * uSignal;
           vec3 phosphor = mix(
             vec3(0.15, 0.85, 0.35),
             vec3(0.95, 0.55, 0.12),
@@ -314,24 +321,24 @@
           );
           col = mix(col, col * phosphor * 1.1, snowAmt * step(0.72, n));
 
-          // Seismic waveform stripe (oscilloscope green)
           float wave = abs(sin(vUv.x * 25.0 + uTime * 4.0 + uBass * 8.0));
           float band = smoothstep(0.02, 0.0, abs(vUv.y - (0.35 + uMid * 0.2 + wave * 0.08 * uBass)));
-          col += vec3(0.1, 0.55, 0.25) * band * (uBass + uMid) * 0.65;
+          col += vec3(0.1, 0.55, 0.25) * band * (uBass + uMid) * 0.65 * uSignal;
 
-          // Rolling interference bar
           float bar = smoothstep(0.04, 0.0, abs(fract(vUv.y * 0.7 + uTime * (0.08 + uHigh * 0.2)) - 0.5));
-          col += vec3(0.2, 0.45, 0.15) * bar * uHigh * 0.4;
+          col += vec3(0.2, 0.45, 0.15) * bar * uHigh * 0.4 * uSignal;
 
-          // Keep base texture readable — never lift toward white
           col = clamp(col, 0.0, 1.0);
-          gl_FragColor = vec4(col, 1.0);
+
+          // uSignal 0 = pure bust, 1 = full interference
+          vec3 finalCol = mix(clean, col, uSignal);
+          gl_FragColor = vec4(finalCol, 1.0);
         }
       `
     })
 
     // ------------------------------------------------------------
-    // ATMOSPHERE (from EM field — sparse shell, fixed)
+    // ATMOSPHERE
     // ------------------------------------------------------------
 
     const atmosphereGroup = new THREE.Group()
@@ -340,7 +347,7 @@
     const atmoMat = new THREE.LineBasicMaterial({
       color: new THREE.Color(0.45, 0.7, 1.0),
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.8,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     })
@@ -362,12 +369,10 @@
             if (r2 < clearRadius * clearRadius) continue
             if (r2 > (half * step * 0.95) * (half * step * 0.95)) continue
 
-            // Orient ticks outward / tangential for a field-ish feel
             const len = Math.sqrt(r2) || 1
             const dx = x / len
             const dy = y / len
             const dz = z / len
-            // Mix radial with a swirl so it reads as atmosphere, not spokes only
             const tx = -dz
             const tz = dx
             const hx = dx * 0.45 + tx * 0.55
@@ -455,10 +460,13 @@
     )
 
     // ------------------------------------------------------------
-    // LOOP — slow 3-axis motion + interference uniforms
+    // LOOP — 3 axes from bass/mid/high, never zero speed
     // ------------------------------------------------------------
 
-    const rotSpeed = { x: 0, y: 0, z: 0 }
+    // Minimum angular speeds (rad/frame-ish) so axes never stop
+    const MIN_X = 0.00035
+    const MIN_Y = 0.00045
+    const MIN_Z = 0.0003
 
     function tick(now) {
       const t = now * 0.001
@@ -470,30 +478,30 @@
       uniforms.uBass.value = eBass
       uniforms.uMid.value = eMid
       uniforms.uHigh.value = eHigh
+      uniforms.uSignal.value = eSignal
 
       if (model != null) {
-        const s = 1 + eBass * 0.14
+        // Slight scale only when signal rises
+        const s = 1 + eBass * 0.12 * eSignal
         root.scale.setScalar(s)
 
-        // Continuous slow drift on all three axes (audio nudges rates)
-        rotSpeed.y = 0.00055 + eMid * 0.0045
-        rotSpeed.x = 0.00028 + eBass * 0.0025
-        rotSpeed.z = 0.00022 + eHigh * 0.003
-        root.rotation.x += rotSpeed.x
-        root.rotation.y += rotSpeed.y
-        root.rotation.z += rotSpeed.z
+        // Each band paces one axis; floor keeps motion alive when quiet
+        const spdX = MIN_X + eBass * 0.0045
+        const spdY = MIN_Y + eMid * 0.0055
+        const spdZ = MIN_Z + eHigh * 0.004
+        root.rotation.x += spdX
+        root.rotation.y += spdY
+        root.rotation.z += spdZ
 
-        // Soft orbital wander
-        root.position.x = Math.sin(t * 0.23) * 0.08 * (0.4 + eMid)
-        root.position.y = Math.sin(t * 0.31) * 0.06 * (0.4 + eBass)
-        root.position.z = Math.cos(t * 0.19) * 0.05 * (0.4 + eHigh)
+        root.position.x = Math.sin(t * 0.2) * 0.05 * (0.25 + eMid)
+        root.position.y = Math.sin(t * 0.27) * 0.04 * (0.25 + eBass)
+        root.position.z = Math.cos(t * 0.17) * 0.035 * (0.25 + eHigh)
       }
 
-      // Atmosphere gently counter-rotates for depth
       atmosphereGroup.rotation.y = root.rotation.y * 0.25
       atmosphereGroup.rotation.x = root.rotation.x * 0.15
 
-      renderer.toneMappingExposure = 1.12 + eBass * 0.08
+      renderer.toneMappingExposure = 1.12 + eBass * 0.06 * eSignal
       renderer.render(scene, camera)
       requestAnimationFrame(tick)
     }
