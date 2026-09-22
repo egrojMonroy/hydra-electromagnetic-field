@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Electromagnetic Field</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #02040a;
+      color: #cfe6f8;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    #view { position: fixed; inset: 0; }
+    #view canvas.scene {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #ui {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(900px 500px at 30% 20%, #143055aa, transparent 60%),
+        radial-gradient(700px 400px at 80% 80%, #0a2a28aa, transparent 55%),
+        #02040aee;
+      z-index: 10;
+      text-align: center;
+      padding: 1.5rem;
+    }
+    #ui.hidden { display: none; }
+    #ui h1 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(1.8rem, 5vw, 2.6rem);
+      margin: 0 0 0.6rem;
+      letter-spacing: -0.02em;
+    }
+    #ui p {
+      margin: 0 auto 1.5rem;
+      max-width: 30rem;
+      color: #8aa3ba;
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    #ui button, #ui a.btn {
+      border: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 0.9rem 1.25rem;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    #start { background: #6ec8ff; color: #041018; }
+    #start:hover { filter: brightness(1.08); }
+    a.btn-hydra {
+      background: transparent;
+      color: #cfe6f8;
+      border: 1px solid #2a3d55 !important;
+    }
+    a.btn-hydra:hover { background: rgba(255,255,255,0.06); }
+    .note {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: #6a7f94;
+      max-width: 26rem;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.4;
+    }
+    #hud {
+      position: fixed;
+      left: 1rem;
+      bottom: 1rem;
+      z-index: 5;
+      font-size: 0.75rem;
+      color: #7f93a8;
+      line-height: 1.45;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #hud.show { opacity: 1; }
+    /* Cheap hologram depth cue — CSS only, no extra 3D geometry */
+    #holo-scan {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 3px,
+        rgba(120, 190, 255, 0.035) 3px,
+        rgba(120, 190, 255, 0.035) 4px
+      );
+      mix-blend-mode: screen;
+      opacity: 0.85;
+      animation: holoDrift 9s linear infinite;
+    }
+    @keyframes holoDrift {
+      from { background-position: 0 0; }
+      to { background-position: 0 48px; }
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="view"></div>
+  <div id="holo-scan" aria-hidden="true"></div>
+
+  <div id="ui">
+    <div>
+      <h1>Electromagnetic Field</h1>
+      <p>
+        Interacting dipole field lines around square bar magnets, plus a sparse
+        atmosphere of local <strong>B</strong> samples for depth. Bass grows /
+        joins the field.
+      </p>
+      <div class="actions">
+        <button id="start" type="button">Start microphone</button>
+        <a class="btn btn-hydra" href="index.html">Home</a>
+      </div>
+      <p class="note">
+        Allow the microphone — low frequencies drive field strength.
+      </p>
+    </div>
+  </div>
+  <div id="hud">
+    1–4 magnets · mouse tilt · bass → field joins<br />
+    sparse atmosphere = depth cue (not audio-reactive)
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.163.0/build/three.module.js"
+
+    // (Hydra link removed from UI — use Home for navigation)
+
+    // ------------------------------------------------------------
+    // AUDIO — bass = field, highs = atmosphere
+    // ------------------------------------------------------------
+
+    const fftBins = new Float32Array(8)
+    let audioCtx = null
+    let analyser = null
+    let freqData = null
+
+    async function startMic() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true
+        },
+        video: false
+      })
+      audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      // Preamp — iPad / quiet built-in mics need more gain
+      const micGain = audioCtx.createGain()
+      micGain.gain.value = 4.5
+      analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.72
+      source.connect(micGain)
+      micGain.connect(analyser)
+      freqData = new Uint8Array(analyser.frequencyBinCount)
+    }
+
+    function sampleFft() {
+      if (analyser == null || freqData == null) return
+      analyser.getByteFrequencyData(freqData)
+      const n = freqData.length
+      const per = Math.floor(n / 8)
+      for (let i = 0; i < 8; i++) {
+        let sum = 0
+        const start = i * per
+        const end = i === 7 ? n : start + per
+        for (let j = start; j < end; j++) sum += freqData[j]
+        // Aggressive scale for iPad sensitivity
+        const next = Math.min(3.8, ((sum / (end - start)) / 255) * 4.5)
+        fftBins[i] += (next - fftBins[i]) * 0.45
+      }
+    }
+
+    function bass() {
+      return fftBins[0] * 0.45 + fftBins[1] * 0.35 + fftBins[2] * 0.20
+    }
+
+    // fieldAmount: dipole strength + how much lines join (bass only)
+    let fieldAmount = 0.35
+
+    function updateAudioEnvelopes() {
+      const fieldTarget = 0.2 + bass() * 1.6
+      fieldAmount += (fieldTarget - fieldAmount) * 0.28
+    }
+
+    function clamp01(x) {
+      return Math.max(0, Math.min(1, x))
+    }
+
+    function smoothstep(edge0, edge1, x) {
+      const t = clamp01((x - edge0) / (edge1 - edge0))
+      return t * t * (3 - 2 * t)
+    }
+
+    // ------------------------------------------------------------
+    // SCENE
+    // ------------------------------------------------------------
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(
+      42,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    )
+    camera.position.set(0, 1.2, 11)
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance"
+    })
+    renderer.setClearColor(0x02040a, 1)
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+    renderer.domElement.className = "scene"
+    document.getElementById("view").appendChild(renderer.domElement)
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+    })
+
+    // ------------------------------------------------------------
+    // MAGNETS
+    // ------------------------------------------------------------
+
+    const magnets = [
+      { p: new THREE.Vector3(0, 0, 0), m: new THREE.Vector3(0, 1, 0) },
+      { p: new THREE.Vector3(0, 0, 0), m: new THREE.Vector3(0, 1, 0) },
+      { p: new THREE.Vector3(0, 0, 0), m: new THREE.Vector3(1, 0, 0) },
+      { p: new THREE.Vector3(0, 0, 0), m: new THREE.Vector3(1, 0, 0) }
+    ]
+
+    let activeMagnets = 4
+
+    window.addEventListener("keydown", (event) => {
+      if (
+        event.key === "1" ||
+        event.key === "2" ||
+        event.key === "3" ||
+        event.key === "4"
+      ) {
+        activeMagnets = Number(event.key)
+        rebuildField()
+        rebuildAtmosphere()
+        createMagnetMarkers()
+        syncMagnetMarkers()
+      }
+    })
+
+    const PHASE_MS = 30 * 1000
+    const LOOP_MS = PHASE_MS * 4
+    const choreoStart = performance.now()
+
+    const _r = new THREE.Vector3()
+    const _B = new THREE.Vector3()
+    const _tmpA = new THREE.Vector3()
+    const _tmpB = new THREE.Vector3()
+    const _tmpC = new THREE.Vector3()
+    const _tmpD = new THREE.Vector3()
+    const _tmpM = new THREE.Vector3()
+    const _p = new THREE.Vector3()
+    const _seed = new THREE.Vector3()
+    const _u = new THREE.Vector3()
+    const _v = new THREE.Vector3()
+    const _axis = new THREE.Vector3()
+    const _helper = new THREE.Vector3()
+
+    function pointOnCubeOrbit(t, half, lane) {
+      const per = ((t % 1) + 1) % 1
+      const edge = Math.floor(per * 4) % 4
+      const u = (per * 4) % 1
+      let x = 0
+      let z = 0
+      if (edge === 0) {
+        x = THREE.MathUtils.lerp(-half, half, u)
+        z = -half
+      } else if (edge === 1) {
+        x = half
+        z = THREE.MathUtils.lerp(-half, half, u)
+      } else if (edge === 2) {
+        x = THREE.MathUtils.lerp(half, -half, u)
+        z = half
+      } else {
+        x = -half
+        z = THREE.MathUtils.lerp(half, -half, u)
+      }
+      return _tmpC.set(x, lane + Math.sin(per * Math.PI * 2) * half * 0.35, z)
+    }
+
+    function updateMagnetChoreography(now) {
+      const u = ((now - choreoStart) % LOOP_MS) / LOOP_MS
+      const minute = u * 4
+      // Continuous drift so no phase looks "frozen"
+      const spin = now * 0.00035
+      const breathe = 1 + Math.sin(now * 0.0011) * 0.06
+
+      let wCluster = 1 - smoothstep(0.85, 1.15, minute)
+      let wSplit =
+        smoothstep(0.85, 1.15, minute) * (1 - smoothstep(1.85, 2.15, minute))
+      let wOrbit =
+        smoothstep(1.85, 2.15, minute) * (1 - smoothstep(2.85, 3.15, minute))
+      let wGroups = smoothstep(2.85, 3.15, minute)
+
+      const wSum = wCluster + wSplit + wOrbit + wGroups
+      if (wSum > 1e-6) {
+        wCluster /= wSum
+        wSplit /= wSum
+        wOrbit /= wSum
+        wGroups /= wSum
+      }
+
+      // Cube path advances continuously (not only in orbit phase)
+      const orbitT = now * 0.00008
+
+      for (let i = 0; i < 4; i++) {
+        // Cluster slowly tumbles instead of sitting still
+        const clusterR = 0.32 * breathe
+        const clusterPhi = i * (Math.PI * 0.5) + 0.4 + spin * 1.4
+        const clusterTheta = 0.55 + i * 0.35 + Math.sin(spin + i) * 0.15
+        _tmpA.set(
+          clusterR * Math.sin(clusterTheta) * Math.cos(clusterPhi),
+          clusterR * Math.cos(clusterTheta),
+          clusterR * Math.sin(clusterTheta) * Math.sin(clusterPhi)
+        )
+
+        const splitR = (1.1 + smoothstep(1.0, 2.0, minute) * 1.6) * breathe
+        const splitPhi = i * (Math.PI * 0.5) + 0.25 + spin * 0.6
+        const splitElev = (i % 2 === 0 ? 0.55 : -0.55) + Math.sin(i + spin) * 0.25
+        _tmpB.set(
+          splitR * Math.cos(splitElev) * Math.cos(splitPhi),
+          splitR * Math.sin(splitElev),
+          splitR * Math.cos(splitElev) * Math.sin(splitPhi)
+        )
+
+        pointOnCubeOrbit((((orbitT + i * 0.25) % 1) + 1) % 1, 2.2 * breathe, (i - 1.5) * 0.55)
+
+        // Two groups keep circling slowly on their sides
+        const groupSide = i < 2 ? -1 : 1
+        const pair = i % 2
+        const gAng = spin * 1.8 + i * 0.7
+        _tmpD.set(
+          groupSide * (2.2 + Math.cos(gAng) * 0.45) * breathe,
+          (pair === 0 ? 0.85 : -0.85) + Math.sin(gAng * 1.3) * 0.55,
+          groupSide * (0.55 + Math.sin(gAng) * 0.65)
+        )
+
+        magnets[i].p.set(0, 0, 0)
+        magnets[i].p.addScaledVector(_tmpA, wCluster)
+        magnets[i].p.addScaledVector(_tmpB, wSplit)
+        magnets[i].p.addScaledVector(_tmpC, wOrbit)
+        magnets[i].p.addScaledVector(_tmpD, wGroups)
+
+        // Global slow yaw so even blended poses keep drifting
+        const gx = magnets[i].p.x
+        const gz = magnets[i].p.z
+        const cs = Math.cos(spin * 0.35)
+        const sn = Math.sin(spin * 0.35)
+        magnets[i].p.x = gx * cs - gz * sn
+        magnets[i].p.z = gx * sn + gz * cs
+
+        const upright = wCluster * 0.85 + wSplit * 0.35
+        const mx = Math.sin(u * Math.PI * 2 + i * 1.7 + spin) * 0.35
+        const my = Math.cos(u * Math.PI * 2 * 0.5 + i + spin * 0.5)
+        const mz = Math.sin(u * Math.PI * 2 * 0.75 + i * 0.9 + spin) * 0.45
+        magnets[i].m
+          .set(mx * (1 - upright), my, mz * (1 - upright * 0.5))
+          .normalize()
+      }
+    }
+
+    // ------------------------------------------------------------
+    // SUPERPOSED DIPOLE FIELD — lines join when moment is strong
+    // ------------------------------------------------------------
+
+    function magneticFieldInto(out, point) {
+      out.set(0, 0, 0)
+      // Bass-driven moment (slightly larger reach; same seed count = cheap)
+      const momentScale = 0.7 + fieldAmount * 3.4
+
+      for (let i = 0; i < activeMagnets; i++) {
+        const magnet = magnets[i]
+        _r.subVectors(point, magnet.p)
+        const distance = _r.length()
+        if (distance < 0.22) continue
+
+        const r2 = distance * distance
+        const r3 = r2 * distance
+        const r5 = r3 * r2
+        _tmpM.copy(magnet.m).multiplyScalar(momentScale)
+        const mdotr = _tmpM.dot(_r)
+        out.addScaledVector(_r, (3 * mdotr) / r5)
+        out.addScaledVector(_tmpM, -1 / r3)
+      }
+      return out
+    }
+
+    function traceFieldLine(seed, direction, outPoints) {
+      outPoints.length = 0
+      _p.copy(seed)
+      // Same step count (perf), larger steps + volume → bigger-looking field
+      const steps = 80 + ((fieldAmount * 55) | 0)
+      const stepSize = 0.11 + fieldAmount * 0.04
+
+      for (let i = 0; i < steps; i++) {
+        magneticFieldInto(_B, _p)
+        const magnitude = _B.length()
+        if (magnitude < 0.00002) break
+        _B.normalize().multiplyScalar(direction * stepSize)
+        _p.add(_B)
+        outPoints.push(_p.x, _p.y, _p.z)
+        if (Math.abs(_p.x) > 9 || Math.abs(_p.y) > 9 || Math.abs(_p.z) > 9) {
+          break
+        }
+      }
+    }
+
+    const fieldGroup = new THREE.Group()
+    const atmosphereGroup = new THREE.Group()
+    const magnetGroup = new THREE.Group()
+    scene.add(fieldGroup)
+    scene.add(atmosphereGroup)
+    scene.add(magnetGroup)
+
+    const lineMat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(0.22, 0.58, 0.88),
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+
+    const atmoMat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(0.45, 0.7, 1.0),
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+
+    const traceBuf = []
+
+    function clearGroup(group) {
+      while (group.children.length > 0) {
+        const child = group.children[0]
+        group.remove(child)
+        if (child.geometry != null) child.geometry.dispose()
+      }
+    }
+
+    function makeFieldLine(xyz) {
+      if (xyz.length < 24) return
+      const geom = new THREE.BufferGeometry()
+      geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(xyz), 3))
+      fieldGroup.add(new THREE.Line(geom, lineMat))
+    }
+
+    function rebuildField() {
+      clearGroup(fieldGroup)
+
+      const strength = fieldAmount
+      const ringCount = 2 + (strength > 0.45 ? 1 : 0) + (strength > 0.9 ? 1 : 0)
+      const seedsPerRing = 8 + ((clamp01(strength) * 6) | 0)
+
+      for (let n = 0; n < activeMagnets; n++) {
+        const magnet = magnets[n]
+        _axis.copy(magnet.m).normalize()
+        if (Math.abs(_axis.y) < 0.9) _helper.set(0, 1, 0)
+        else _helper.set(1, 0, 0)
+        _u.crossVectors(_axis, _helper).normalize()
+        _v.crossVectors(_axis, _u).normalize()
+
+        for (let ring = 0; ring < ringCount; ring++) {
+          const radius = 0.38 + ring * 0.14
+          for (let j = 0; j < seedsPerRing; j++) {
+            const angle = (j / seedsPerRing) * Math.PI * 2
+            _seed
+              .copy(magnet.p)
+              .addScaledVector(_u, Math.cos(angle) * radius)
+              .addScaledVector(_v, Math.sin(angle) * radius)
+              .addScaledVector(_axis, (ring - ringCount * 0.5) * 0.05)
+
+            traceFieldLine(_seed, 1, traceBuf)
+            const forward = traceBuf.slice()
+            traceFieldLine(_seed, -1, traceBuf)
+
+            const combined = []
+            for (let k = traceBuf.length - 3; k >= 0; k -= 3) {
+              combined.push(traceBuf[k], traceBuf[k + 1], traceBuf[k + 2])
+            }
+            for (let k = 0; k < forward.length; k++) combined.push(forward[k])
+            makeFieldLine(combined)
+          }
+        }
+      }
+
+      lineMat.opacity = 0.22 + Math.min(0.5, strength * 0.4)
+    }
+
+    // ------------------------------------------------------------
+    // ATMOSPHERE — fixed sparse lattice over the whole volume
+    // Not audio-reactive; clears the center so dipole lines stay readable.
+    // ------------------------------------------------------------
+
+    let atmosphereBuilt = false
+
+    function rebuildAtmosphere() {
+      // Build once (or on magnet-count change) — static depth cue
+      clearGroup(atmosphereGroup)
+
+      const positions = []
+      // Large sparse grid; skip a hollow ball near origin
+      const half = 4
+      const step = 2.0
+      const clearRadius = 2.4
+      const segLen = 0.22
+
+      for (let ix = -half; ix <= half; ix++) {
+        for (let iy = -half; iy <= half; iy++) {
+          for (let iz = -half; iz <= half; iz++) {
+            const x = ix * step
+            const y = iy * step
+            const z = iz * step
+            const r2 = x * x + y * y + z * z
+            if (r2 < clearRadius * clearRadius) continue
+            // Keep only a spherical shell of space (not a dense cube core)
+            if (r2 > (half * step * 0.95) * (half * step * 0.95)) continue
+
+            _seed.set(x, y, z)
+            magneticFieldInto(_B, _seed)
+            const mag = _B.length()
+            if (mag < 0.00008) {
+              // Still place a faint axis-aligned tick for volume (3D space cue)
+              positions.push(x - segLen * 0.5, y, z, x + segLen * 0.5, y, z)
+              continue
+            }
+            _B.normalize()
+            positions.push(
+              x - _B.x * segLen * 0.5,
+              y - _B.y * segLen * 0.5,
+              z - _B.z * segLen * 0.5,
+              x + _B.x * segLen * 0.5,
+              y + _B.y * segLen * 0.5,
+              z + _B.z * segLen * 0.5
+            )
+          }
+        }
+      }
+
+      if (positions.length >= 6) {
+        const g = new THREE.BufferGeometry()
+        g.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(positions), 3)
+        )
+        atmosphereGroup.add(new THREE.LineSegments(g, atmoMat))
+      }
+
+      atmosphereBuilt = true
+    }
+
+    // ------------------------------------------------------------
+    // SQUARE BAR MAGNETS — TV static red / blue
+    // ------------------------------------------------------------
+
+    const TEX_SIZE = 24
+    const northTextures = []
+    const southTextures = []
+
+    function makeNoiseTexture(baseR, baseG, baseB) {
+      const c = document.createElement("canvas")
+      c.width = TEX_SIZE
+      c.height = TEX_SIZE
+      const tex = new THREE.CanvasTexture(c)
+      tex.magFilter = THREE.NearestFilter
+      tex.minFilter = THREE.NearestFilter
+      return { canvas: c, ctx: c.getContext("2d"), tex, baseR, baseG, baseB }
+    }
+
+    function paintTvNoise(pack) {
+      const { ctx, baseR, baseG, baseB } = pack
+      const img = ctx.createImageData(TEX_SIZE, TEX_SIZE)
+      const d = img.data
+      for (let i = 0; i < d.length; i += 4) {
+        const n = Math.random()
+        d[i] = Math.min(255, (baseR * (0.45 + n * 0.9)) | 0)
+        d[i + 1] = Math.min(255, (baseG * (0.35 + n * 0.85)) | 0)
+        d[i + 2] = Math.min(255, (baseB * (0.45 + n * 0.9)) | 0)
+        d[i + 3] = 255
+      }
+      ctx.putImageData(img, 0, 0)
+      pack.tex.needsUpdate = true
+    }
+
+    function createMagnetMarkers() {
+      magnetGroup.clear()
+      northTextures.length = 0
+      southTextures.length = 0
+
+      const halfLen = 0.28
+      const thick = 0.16
+      const wide = 0.16
+
+      for (let i = 0; i < activeMagnets; i++) {
+        const northPack = makeNoiseTexture(200, 40, 35)
+        const southPack = makeNoiseTexture(35, 90, 200)
+        paintTvNoise(northPack)
+        paintTvNoise(southPack)
+        northTextures.push(northPack)
+        southTextures.push(southPack)
+
+        const marker = new THREE.Group()
+        const north = new THREE.Mesh(
+          new THREE.BoxGeometry(wide, halfLen, thick),
+          new THREE.MeshBasicMaterial({ map: northPack.tex })
+        )
+        north.position.y = halfLen * 0.5
+        const south = new THREE.Mesh(
+          new THREE.BoxGeometry(wide, halfLen, thick),
+          new THREE.MeshBasicMaterial({ map: southPack.tex })
+        )
+        south.position.y = -halfLen * 0.5
+        const outline = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(wide, halfLen * 2, thick)),
+          new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 })
+        )
+        marker.add(north)
+        marker.add(south)
+        marker.add(outline)
+        magnetGroup.add(marker)
+      }
+    }
+
+    function syncMagnetMarkers() {
+      for (let i = 0; i < magnetGroup.children.length; i++) {
+        const marker = magnetGroup.children[i]
+        const magnet = magnets[i]
+        if (magnet == null) continue
+        marker.position.copy(magnet.p)
+        marker.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          magnet.m.clone().normalize()
+        )
+      }
+    }
+
+    let lastTvNoise = 0
+    function updateMagnetNoise(now) {
+      if (now - lastTvNoise < 100) return
+      lastTvNoise = now
+      for (let i = 0; i < northTextures.length; i++) {
+        paintTvNoise(northTextures[i])
+        paintTvNoise(southTextures[i])
+      }
+    }
+
+    // ------------------------------------------------------------
+    // LOOP
+    // ------------------------------------------------------------
+
+    let mouseX = 0
+    let mouseY = 0
+    window.addEventListener("mousemove", (event) => {
+      mouseX = event.clientX / window.innerWidth - 0.5
+      mouseY = event.clientY / window.innerHeight - 0.5
+    })
+
+    let lastRebuild = 0
+    const REBUILD_MS = 700
+
+    function tick(now) {
+      sampleFft()
+      updateAudioEnvelopes()
+      updateMagnetChoreography(now)
+      syncMagnetMarkers()
+      updateMagnetNoise(now)
+
+      if (now - lastRebuild > REBUILD_MS) {
+        rebuildField()
+        lastRebuild = now
+      }
+
+      const level = fieldAmount
+      fieldGroup.rotation.y += 0.0012 + level * 0.0035
+      atmosphereGroup.rotation.y = fieldGroup.rotation.y
+      magnetGroup.rotation.y = fieldGroup.rotation.y
+
+      const rx = mouseY * 0.4
+      const rz = mouseX * 0.14
+      fieldGroup.rotation.x = rx
+      fieldGroup.rotation.z = rz
+      atmosphereGroup.rotation.x = rx
+      atmosphereGroup.rotation.z = rz
+      magnetGroup.rotation.x = rx
+      magnetGroup.rotation.z = rz
+
+      lineMat.opacity = 0.22 + Math.min(0.5, level * 0.4)
+
+      const camT = ((now - choreoStart) % LOOP_MS) / LOOP_MS
+      camera.position.x = Math.sin(camT * Math.PI * 2) * 1.2
+      camera.position.y = 1.2 + Math.sin(camT * Math.PI * 2 * 0.5) * 0.4
+      camera.lookAt(0, 0, 0)
+
+      renderer.render(scene, camera)
+      requestAnimationFrame(tick)
+    }
+
+    updateMagnetChoreography(performance.now())
+    updateAudioEnvelopes()
+    rebuildField()
+    rebuildAtmosphere()
+    createMagnetMarkers()
+    syncMagnetMarkers()
+    requestAnimationFrame(tick)
+
+    const ui = document.getElementById("ui")
+    const hud = document.getElementById("hud")
+    document.getElementById("start").addEventListener("click", async () => {
+      try {
+        await startMic()
+        if (audioCtx != null && audioCtx.state === "suspended") {
+          await audioCtx.resume()
+        }
+      } catch (err) {
+        console.warn("Mic unavailable:", err)
+      }
+      ui.classList.add("hidden")
+      hud.classList.add("show")
+    })
+  </script>
+</body>
+</html>

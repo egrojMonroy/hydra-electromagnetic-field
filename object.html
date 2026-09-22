@@ -95,21 +95,19 @@
   <div id="status">Loading model…</div>
   <div id="ui">
     <div>
-      <h1>Sound-reactive object</h1>
+      <h1>Object</h1>
       <p>
-        Alternative view of your USDZ mesh (as GLB for the web).
-        Mic drives scale, glow, and spin — electromagnetic field stays on the main page.
+        Sound-reactive 3D model from your USDZ.
+        Bass → size · mids → spin · highs → glow.
       </p>
       <div class="actions">
-        <button id="start" type="button">Start with mic</button>
-        <a class="btn" href="index.html">Electromagnetic field</a>
-        <a class="btn" id="ar-link" rel="ar" href="16_9_2026.usdz">AR (iOS USDZ)</a>
+        <button id="start" type="button">Start microphone</button>
+        <a class="btn" href="index.html">Home</a>
       </div>
     </div>
   </div>
   <div id="hud">
-    drag to orbit · bass → size · mids → spin · highs → shimmer<br />
-    iPad: hold phone near mic / speak closer for stronger response
+    drag to orbit · bass → size · mids → spin · highs → shimmer
   </div>
 
   <script type="module">
@@ -144,15 +142,11 @@
     renderer.setSize(window.innerWidth, window.innerHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.15
-    renderer.outputColorSpace = THREE.SRGBColorSpace
-    document.body.appendChild(renderer.domElement)
+    renderer.toneMappingExposure = 1.35
 
-    const pmrem = new THREE.PMREMGenerator(renderer)
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-
-    const hemi = new THREE.HemisphereLight(0xb8d4ff, 0x1a120c, 0.85)
-    scene.add(hemi)
+    // Soft fill so the model is visible before mic starts
+    const fill = new THREE.AmbientLight(0xffffff, 0.35)
+    scene.add(fill)
     const key = new THREE.DirectionalLight(0xffffff, 1.1)
     key.position.set(3, 5, 2)
     scene.add(key)
