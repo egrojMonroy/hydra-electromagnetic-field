@@ -171,7 +171,7 @@
     <label for="mic-gain">Mic sensitivity</label>
     <input id="mic-gain" type="range" min="0.5" max="12" step="0.1" value="3" />
     <div class="val">gain <span id="mic-gain-val">3.0</span>×</div>
-    <div class="hint">M hide/show · iPad often needs higher</div>
+    <div class="hint">M or 3× tap top-right · iPad often needs higher</div>
   </aside>
 
   <script type="module">
@@ -209,6 +209,20 @@
 
     window.addEventListener("keydown", (e) => {
       if (e.key === "m" || e.key === "M") {
+        micPanel.classList.toggle("open")
+      }
+    })
+
+    let cornerTaps = 0
+    let cornerTimer = 0
+    window.addEventListener("pointerdown", (e) => {
+      if (e.clientX < window.innerWidth - 56 || e.clientY > 56) return
+      const now = performance.now()
+      if (now - cornerTimer > 900) cornerTaps = 0
+      cornerTimer = now
+      cornerTaps += 1
+      if (cornerTaps >= 3) {
+        cornerTaps = 0
         micPanel.classList.toggle("open")
       }
     })
