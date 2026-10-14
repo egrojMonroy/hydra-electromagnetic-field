@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Júpiter — viaje a la nube oeste</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0b0a09;
+      color: #e6dcc4;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    body.running { cursor: none; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #ui {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 10;
+      text-align: center;
+      padding: 1.5rem;
+      background:
+        radial-gradient(700px 480px at 50% 35%, #3a2a1f99, transparent 60%),
+        #0b0a09ee;
+    }
+    #ui.hidden { display: none; }
+    h1 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(1.6rem, 4vw, 2.3rem);
+      margin: 0 0 0.4rem;
+    }
+    .plate-ref {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-style: italic;
+      color: #b3a68a;
+      margin: 0 auto 1.1rem;
+      font-size: 0.9rem;
+    }
+    p {
+      color: #a99d84;
+      max-width: 30rem;
+      margin: 0 auto 1.1rem;
+      line-height: 1.5;
+    }
+    .keys {
+      font-size: 0.75rem;
+      color: #84796a;
+      max-width: 30rem;
+      margin: 1rem auto 0;
+      line-height: 1.6;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      justify-content: center;
+    }
+    button, a.btn {
+      border: 0;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 0.85rem 1.2rem;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+    }
+    #start { background: #e5a882; color: #1a0f08; }
+    #start-quiet, a.btn {
+      border: 1px solid #4a3f33;
+      color: #e6dcc4;
+      background: transparent;
+    }
+    #status {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 6;
+      font-size: 0.8rem;
+      color: #a99d84;
+      pointer-events: none;
+    }
+    /* Probe readout — H toggles */
+    #hud {
+      position: fixed;
+      left: 1.1rem;
+      bottom: 1rem;
+      z-index: 5;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: rgba(230, 220, 196, 0.62);
+      line-height: 1.55;
+      pointer-events: none;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+      display: none;
+    }
+    #hud.show { display: block; }
+    #hud .chapter {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-variant: small-caps;
+      letter-spacing: 0.08em;
+      font-size: 0.82rem;
+      color: rgba(240, 228, 204, 0.8);
+    }
+    #hud .bar {
+      display: inline-block;
+      width: 5.5rem;
+      height: 0.42rem;
+      border: 1px solid rgba(230, 220, 196, 0.45);
+      vertical-align: middle;
+      margin-left: 0.3rem;
+    }
+    #hud .bar i {
+      display: block;
+      height: 100%;
+      background: rgba(229, 168, 130, 0.8);
+    }
+    /* Text of the piece — T toggles */
+    #caption {
+      position: fixed;
+      left: 50%;
+      bottom: 9vh;
+      transform: translateX(-50%);
+      width: min(46rem, 86vw);
+      z-index: 5;
+      text-align: center;
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-style: italic;
+      font-size: clamp(1rem, 2.2vw, 1.45rem);
+      line-height: 1.45;
+      color: #f0e6cf;
+      text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+      opacity: 0;
+      pointer-events: none;
+    }
+    /* Concert-safe mic trim — hidden by default; press M to toggle */
+    #mic-panel {
+      position: fixed;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 7.5rem;
+      padding: 0.55rem 0.6rem;
+      background: rgba(14, 11, 9, 0.78);
+      border: 1px solid rgba(140, 115, 90, 0.35);
+      font-size: 0.65rem;
+      color: #b8aa90;
+      line-height: 1.35;
+      display: none;
+    }
+    #mic-panel.open { display: block; }
+    #mic-panel label { display: block; margin-bottom: 0.25rem; }
+    #mic-panel input[type="range"] {
+      width: 100%;
+      accent-color: #e5a882;
+    }
+    #mic-panel .val { opacity: 0.85; margin-top: 0.15rem; }
+    #mic-panel .hint { opacity: 0.55; margin-top: 0.35rem; font-size: 0.58rem; }
+  </style>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230b0a09' width='32' height='32'/%3E%3Ccircle cx='16' cy='16' r='10' fill='%23d6cbb0'/%3E%3Cellipse cx='19' cy='12' rx='4' ry='2' fill='%23e5a882'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="status">Cargando lámina…</div>
+  <div id="ui">
+    <div>
+      <h1>Júpiter — la nube oeste</h1>
+      <div class="plate-ref">
+        The planet Jupiter. Observed November 1, 1880, at 9h. 30m. P.M. — E. L. Trouvelot
+      </div>
+      <p>
+        Un descenso de 40 minutos desde la lámina IX de Trouvelot, a través de la bruma,
+        las nubes de amoníaco y de hidrosulfuro de amonio, el viento de la Gran Mancha Roja
+        y la capa profunda. El sonido mueve el viento, la densidad de las nubes y los relámpagos.
+      </p>
+      <div class="actions">
+        <button id="start" type="button">Iniciar con micrófono</button>
+        <button id="start-quiet" type="button">Iniciar sin micrófono</button>
+        <a class="btn" href="index.html">Inicio</a>
+      </div>
+      <p id="err" style="color:#ff9a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
+      <div class="keys">
+        Espacio pausa · ← → ±30 s (Shift ±5 min) · 1–7 capítulos · T texto · H instrumentos ·
+        M micrófono (o 3 toques arriba a la derecha) · F pantalla completa · S velocidad de ensayo.
+        URL: <code>?min=40</code> duración · <code>?t=25:00</code> empezar en.
+      </div>
+    </div>
+  </div>
+  <div id="hud" class="show"></div>
+  <div id="caption"></div>
+
+  <aside id="mic-panel" aria-label="Sensibilidad del micrófono">
+    <label for="mic-gain">Sensibilidad</label>
+    <input id="mic-gain" type="range" min="0.5" max="12" step="0.1" value="3" />
+    <div class="val">ganancia <span id="mic-gain-val">3.0</span>×</div>
+    <div class="hint">M o 3 toques arriba a la derecha · iPad suele necesitar más</div>
+  </aside>
+
+  <script type="module">
+    import * as THREE from "three"
+
+    const statusEl = document.getElementById("status")
+    const ui = document.getElementById("ui")
+    const hud = document.getElementById("hud")
+    const captionEl = document.getElementById("caption")
+    const errEl = document.getElementById("err")
+
+    // ------------------------------------------------------------
+    // TIMELINE — chapters as fractions of the whole journey
+    // ------------------------------------------------------------
+
+    const params = new URLSearchParams(location.search)
+    const minutes = Number(params.get("min") ?? 40)
+    const DURATION = (Number.isFinite(minutes) && minutes > 0 ? minutes : 40) * 60
+
+    function parseClock(s) {
+      if (s == null) return 0
+      const parts = s.split(":").map(Number)
+      if (parts.some((n) => Number.isNaN(n))) return 0
+      return parts.reduce((acc, n) => acc * 60 + n, 0)
+    }
+
+    const CHAPTERS = [
+      {
+        at: 0,
+        name: "Lámina IX",
+        line: "The planet Jupiter. Observed November 1, 1880, at 9h. 30m. P.M."
+      },
+      {
+        at: 0.075,
+        name: "Territorio sin superficie",
+        line: "Júpiter es un territorio sin superficie."
+      },
+      {
+        at: 0.2,
+        name: "En búsqueda de la nube oeste",
+        line: "Estamos en búsqueda de la nube oeste, en la capa profunda del planeta."
+      },
+      {
+        at: 0.325,
+        name: "Nubes de amoníaco",
+        line: "En virtud del mercurio en nuestra sangre atravesamos las capas de nubes de amoníaco…"
+      },
+      {
+        at: 0.475,
+        name: "Hidrosulfuro de amonio",
+        line: "…e hidrosulfuro de amonio."
+      },
+      {
+        at: 0.625,
+        name: "Viento de la Gran Mancha Roja",
+        line: "Aprovecharemos el viento circundante de la Gran Mancha Roja para llegar más rápido, aun a costa del control."
+      },
+      {
+        at: 0.825,
+        name: "Capa profunda",
+        line: "Les pedimos ecualizar su atención durante el trayecto de acuerdo a las circunstancias."
+      }
+    ]
+
+    function chapterIndex(u) {
+      let idx = 0
+      for (let i = 0; i < CHAPTERS.length; i++) if (u >= CHAPTERS[i].at) idx = i
+      return idx
+    }
+
+    // Smoothstep-eased keyframe track: [[u, value], ...]
+    function track(keys, u) {
+      if (u <= keys[0][0]) return keys[0][1]
+      for (let i = 1; i < keys.length; i++) {
+        const [u1, v1] = keys[i]
+        if (u <= u1) {
+          const [u0, v0] = keys[i - 1]
+          const s = (u - u0) / (u1 - u0)
+          return v0 + (v1 - v0) * s * s * (3 - 2 * s)
+        }
+      }
+      return keys[keys.length - 1][1]
+    }
+
+    function smooth(a, b, x) {
+      const s = Math.min(1, Math.max(0, (x - a) / (b - a)))
+      return s * s * (3 - 2 * s)
+    }
+
+    // Camera altitude (world units). Cloud decks: haze 4, NH3 2, NH4SH 0, H2O −2, deep −4.
+    const ALT = [
+      [0.19, 7.0], [0.24, 5.4], [0.3, 4.5], [0.33, 3.4], [0.37, 2.6], [0.4, 2.35],
+      [0.43, 1.6], [0.47, 1.25], [0.52, 0.6], [0.55, 0.35], [0.58, -0.4], [0.62, -0.75],
+      [0.65, -0.9], [0.82, -1.0], [0.85, -1.6], [0.88, -2.5], [0.93, -3.0], [1, -3.0]
+    ]
+    const PITCH = [
+      [0.19, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12],
+      [0.6, -0.06], [0.65, -0.04], [0.83, -0.04], [0.9, -0.02], [1, 0]
+    ]
+    const SPEED = [
+      [0.19, 0.9], [0.25, 0.55], [0.32, 0.6], [0.45, 0.55], [0.6, 0.7], [0.64, 2.2],
+      [0.72, 3.2], [0.8, 3.8], [0.835, 0.9], [0.9, 0.5], [0.97, 0.25], [1, 0.05]
+    ]
+    const CONTROL_LOSS = [
+      [0.6, 0.04], [0.645, 0.55], [0.7, 0.9], [0.8, 1.0], [0.835, 0.15], [0.9, 0.08], [1, 0.03]
+    ]
+    const VORTEX = [[0.62, 0], [0.645, 1], [0.8, 1], [0.83, 0]]
+    const ORBIT_RADIUS = [[0.625, 26], [0.7, 12], [0.76, 7], [0.815, 14]]
+    const LIGHTNING = [
+      [0.48, 0], [0.52, 0.25], [0.6, 0.25], [0.63, 0], [0.8, 0], [0.85, 1], [0.95, 1], [0.985, 0]
+    ]
+    const MOTES = [
+      [0.19, 0], [0.3, 0.15], [0.4, 0.35], [0.5, 0.3], [0.62, 0.3], [0.65, 0.9],
+      [0.82, 1.0], [0.85, 0.35], [1, 0.2]
+    ]
+    const BAND_TINT = [[0.19, 1], [0.33, 0.8], [0.45, 0.3], [0.6, 0.15]]
+    const WEST_DIST = [[0.8, 220], [0.9, 120], [0.96, 45], [0.985, 12], [1, 0]]
+    const PLATE_R_SCREEN = 0.3884
+    const ZOOM_PLATE_END = 1.15
+    const ZOOM_GLOBE_END = 2.4
+    const ZOOM_DIVE = 30
+
+    function zoomAt(u) {
+      if (u < 0.075) return 1 + (ZOOM_PLATE_END - 1) * smooth(0, 0.075, u)
+      if (u < 0.165) {
+        return ZOOM_PLATE_END * Math.pow(ZOOM_GLOBE_END / ZOOM_PLATE_END, smooth(0.075, 0.165, u))
+      }
+      return ZOOM_GLOBE_END * Math.pow(ZOOM_DIVE / ZOOM_GLOBE_END, Math.min(1, (u - 0.165) / 0.035))
+    }
+
+    // Fog colour when the camera is inside a deck (matches layerParams in the shader)
+    const LAYERS = [
+      { h: 4.0, op: 0.55, fog: [0.82, 0.78, 0.7] },
+      { h: 2.0, op: 1.0, fog: [0.9, 0.88, 0.81] },
+      { h: 0.0, op: 1.0, fog: [0.64, 0.45, 0.32] },
+      { h: -2.0, op: 1.0, fog: [0.3, 0.36, 0.45] },
+      { h: -4.0, op: 1.0, fog: [0.55, 0.57, 0.62] }
+    ]
+
+    // ------------------------------------------------------------
+    // RENDERER — one full-screen shader at adaptive resolution
+    // ------------------------------------------------------------
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance"
+    })
+    const MAX_QUALITY = Math.min(window.devicePixelRatio, 1.5)
+    let quality = MAX_QUALITY * 0.7
+    renderer.setPixelRatio(quality)
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    document.body.appendChild(renderer.domElement)
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+
+    // Latitude colour profile sampled from Trouvelot's plate (96 bins of sin(lat), south-up as in the plate)
+    const PROFILE_HEX =
+      "9b967d948f77908c72938f759994799f997da79e81b1a689a89d819b9075a3987cc4b69ad1c2a6d5c5a9ccbda2a3967ba5987dc9bb9ed5c5a9d9c8add6c7abbeb1959d9277b4ab8fdacfb3e4d9bde3d8bbd9cfb2b0a98d8280687d7b6484826abab398d7cdb0dfd4b8e4d8bce1d7bac3bb9f564f42564e42676050746d5a77715d9c967da99f84a79e83aba58ab7b195bdb79ac3bca0cec6aad4ccb0d7ceb2d5ccafc2b99da3977d857d67837d68d4cbaedcd1b5e2cdb0e2cdb0e2ceb1e2ceb1e2ceb1e2ceb1e1cfb2e1cfb2e1cfb2e1cfb2e1d0b3e1d0b3ded3b7d8cdb1cfc4a8bab194a8a184b3ab8ecdc4a7ccc2a6c0b79bada68a9c967a928e738d896f969176a09a7da39d80a19b7e9b9578948f738c886d8682698380678783698c886f"
+    const profileN = PROFILE_HEX.length / 6
+    const profileData = new Uint8Array(profileN * 4)
+    for (let i = 0; i < profileN; i++) {
+      for (let c = 0; c < 3; c++) {
+        profileData[i * 4 + c] = parseInt(PROFILE_HEX.slice(i * 6 + c * 2, i * 6 + c * 2 + 2), 16)
+      }
+      profileData[i * 4 + 3] = 255
+    }
+    const profileTex = new THREE.DataTexture(profileData, profileN, 1)
+    profileTex.magFilter = THREE.LinearFilter
+    profileTex.minFilter = THREE.LinearFilter
+    profileTex.needsUpdate = true
+
+    const plateTex = new THREE.TextureLoader().load(
+      "jupiter-trouvelot-1880.jpg",
+      () => {
+        statusEl.textContent = ""
+      },
+      undefined,
+      () => {
+        statusEl.textContent = "Falta jupiter-trouvelot-1880.jpg"
+      }
+    )
+    plateTex.minFilter = THREE.LinearMipmapLinearFilter
+    plateTex.magFilter = THREE.LinearFilter
+
+    const uniforms = {
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uTime: { value: 0 },
+      uPlate: { value: plateTex },
+      uProfile: { value: profileTex },
+      uPlateMix: { value: 1 },
+      uFlightMix: { value: 0 },
+      uFade: { value: 0 },
+      uWhite: { value: 0 },
+      uZoom: { value: 1 },
+      uGlobeR: { value: 0.3884 },
+      uGlobeC: { value: new THREE.Vector2() },
+      uGlobeRot: { value: 0 },
+      uGT: { value: 0 },
+      uStorm: { value: 0 },
+      uSeeing: { value: 0.0015 },
+      uMoon: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
+      uShadow: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
+      uCam: { value: new THREE.Vector3(0, 7, 0) },
+      uCamAng: { value: new THREE.Vector3() },
+      uVortex: { value: 0 },
+      uVortexC: { value: new THREE.Vector3(0, 0, 16) },
+      uFlash: { value: new THREE.Vector4() },
+      uEclipse: { value: new THREE.Vector3() },
+      uWest: { value: new THREE.Vector4() },
+      uWestGlow: { value: 0.4 },
+      uWestInside: { value: 0 },
+      uFog: { value: new THREE.Vector4() },
+      uMotes: { value: 0 },
+      uMoteTint: { value: new THREE.Vector3(1, 1, 1) },
+      uTravel: { value: 0 },
+      uBandTint: { value: 1 },
+      uBass: { value: 0 },
+      uMid: { value: 0 },
+      uHigh: { value: 0 }
+    }
+
+    const fragmentShader = /* glsl */ `
+      uniform vec2 uRes;
+      uniform float uTime;
+      uniform sampler2D uPlate;
+      uniform sampler2D uProfile;
+      uniform float uPlateMix;
+      uniform float uFlightMix;
+      uniform float uFade;
+      uniform float uWhite;
+      uniform float uZoom;
+      uniform float uGlobeR;
+      uniform vec2 uGlobeC;
+      uniform float uGlobeRot;
+      uniform float uGT;
+      uniform float uStorm;
+      uniform float uSeeing;
+      uniform vec3 uMoon[4];
+      uniform vec3 uShadow[4];
+      uniform vec3 uCam;
+      uniform vec3 uCamAng;
+      uniform float uVortex;
+      uniform vec3 uVortexC;
+      uniform vec4 uFlash;
+      uniform vec3 uEclipse;
+      uniform vec4 uWest;
+      uniform float uWestGlow;
+      uniform float uWestInside;
+      uniform vec4 uFog;
+      uniform float uMotes;
+      uniform vec3 uMoteTint;
+      uniform float uTravel;
+      uniform float uBandTint;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uHigh;
+
+      // Plate IX geometry, measured from the scan: oblate disk tilted 8.9°, south up
+      const vec2 PLATE_C = vec2(0.50126, 0.49714);
+      const float PLATE_ASPECT = 1347.0 / 1018.0;
+      const float PLATE_R = 0.3884;
+      const vec2 EQ = vec2(0.98796, 0.15471);
+      const vec2 UPV = vec2(-0.15471, 0.98796);
+      const float OBL = 0.9355;
+
+      const vec3 SKY_BG = vec3(0.055, 0.052, 0.05);
+      const vec3 GRS_COL = vec3(0.898, 0.639, 0.494);
+      const vec3 RING_COL = vec3(0.93, 0.9, 0.8);
+      const vec3 CUMULUS = vec3(0.91, 0.88, 0.78);
+      const vec3 BEAD = vec3(0.17, 0.16, 0.13);
+      const vec3 MOON_COL = vec3(0.93, 0.92, 0.86);
+      const vec3 SHADOW_COL = vec3(0.05, 0.045, 0.04);
+      const vec3 HAZE_WHITE = vec3(0.88, 0.85, 0.77);
+      const vec3 VERMILION = vec3(1.0, 0.6, 0.48);
+
+      float hash12(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+      vec2 hash22(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.103, 0.0973));
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.xx + p3.yz) * p3.zy);
+      }
+      float hash13(vec3 p3) {
+        p3 = fract(p3 * 0.1031);
+        p3 += dot(p3, p3.zyx + 31.32);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        float a = hash12(i);
+        float b = hash12(i + vec2(1.0, 0.0));
+        float c = hash12(i + vec2(0.0, 1.0));
+        float d = hash12(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+      }
+      float vnoise3(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float n000 = hash13(i);
+        float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+        return mix(
+          mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+          mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
+          f.z
+        );
+      }
+      const mat2 OCT = mat2(1.6, 1.2, -1.2, 1.6);
+      float fbm(vec2 p, int oct) {
+        float s = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 6; i++) {
+          if (i >= oct) break;
+          s += a * vnoise(p);
+          p = OCT * p;
+          a *= 0.5;
+        }
+        return s;
+      }
+      // Cellular distance — Trouvelot's "masses of small cloudlets"
+      float worley(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float d = 1.0;
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            vec2 g = vec2(float(x), float(y));
+            vec2 o = hash22(i + g);
+            o = 0.5 + 0.35 * sin(uTime * 0.05 + 6.2831 * o);
+            vec2 r = g + o - f;
+            d = min(d, dot(r, r));
+          }
+        }
+        return sqrt(d);
+      }
+      vec3 profile(float b) {
+        return texture2D(uProfile, vec2(clamp(b * 0.5 + 0.5, 0.005, 0.995), 0.5)).rgb;
+      }
+      mat2 rot2(float a) {
+        float c = cos(a);
+        float s = sin(a);
+        return mat2(c, s, -s, c);
+      }
+
+      // ---------------- TELESCOPE: plate + procedural Trouvelot globe ----------------
+
+      vec3 sky(vec2 p) {
+        vec3 c = SKY_BG * (1.0 - 0.35 * dot(p, p));
+        vec2 sp = p * 90.0;
+        vec2 id = floor(sp);
+        float h = hash12(id);
+        if (h > 0.985) {
+          vec2 o = hash22(id) - 0.5;
+          float d = length(fract(sp) - 0.5 - o * 0.6);
+          float tw = 0.6 + 0.4 * sin(uTime * (1.0 + h * 3.0) + h * 40.0) + uHigh * 0.8;
+          c += vec3(0.85, 0.82, 0.75) * (1.0 - smoothstep(0.02, 0.12, d)) * (h - 0.985) * 24.0 * tw;
+        }
+        return c;
+      }
+
+      vec3 jupiterMap(float L, float lat, float b, float cl) {
+        float storm = uStorm;
+        float t = uGT;
+        float Lj = L;
+        vec2 m = vec2(Lj * 2.6, lat * 12.0);
+        float w = fbm(m + vec2(t * 0.01, 0.0), 4);
+        float w2 = fbm(m * 2.3 + vec2(-t * 0.013, 3.7), 3);
+        float bb = b + (w - 0.5) * (0.03 + storm * 0.07) + (w2 - 0.5) * 0.012;
+        vec3 col = profile(bb);
+
+        // Rosy equatorial zone; a Jovian storm (1876) swells it to 2–3× its width
+        float eqHalf = 0.11 + storm * 0.16;
+        float rosy = 1.0 - smoothstep(eqHalf * 0.6, eqHalf, abs(bb - 0.03));
+        col = mix(col, col * vec3(1.05, 0.9, 0.84), rosy * (0.35 + storm * 0.5));
+
+        // White cumulus masses of the equatorial belt
+        float cw = worley(vec2(Lj * 9.0, lat * 30.0) + vec2(t * 0.02, 0.0));
+        float puff = (1.0 - smoothstep(0.15, 0.7, cw)) * (0.55 + 0.45 * w2);
+        float cumBand = smoothstep(0.01, 0.05, bb)
+          * (1.0 - smoothstep(0.17 + storm * 0.08, 0.22 + storm * 0.12, bb));
+        col = mix(col, CUMULUS * (0.92 + 0.12 * w), clamp(puff * cumBand * 1.4, 0.0, 1.0));
+
+        // Dark streak with hatching
+        float st = exp(-pow((bb + 0.14) / 0.028, 2.0));
+        col *= 1.0 - st * (0.15 + 0.25 * vnoise(vec2(Lj * 60.0, lat * 300.0)));
+
+        // Row of "jet black beads" (northern commotion of October 1880)
+        float k = floor((Lj + 0.425) / 0.2 + 0.5);
+        float lc = -0.425 + k * 0.2;
+        float sz = k == 0.0 ? 0.025 : k == 1.0 ? 0.05 : k == 2.0 ? 0.056 : k == 3.0 ? 0.046
+          : k == 4.0 ? 0.028 : 0.012 + 0.04 * hash12(vec2(k, 7.0));
+        float db = length(vec2((Lj - lc) * cl, lat + 0.36));
+        col *= 1.0 - 0.35 * (1.0 - smoothstep(sz, sz * 2.2, db));
+        col = mix(col, BEAD, 1.0 - smoothstep(sz * 0.55, sz, db));
+
+        // Rosy lattice band
+        float lw = worley(vec2(Lj * 14.0, lat * 34.0));
+        float lb = exp(-pow((bb + 0.62) / 0.07, 2.0));
+        col = mix(col, vec3(0.86, 0.75, 0.69), lb * (1.0 - smoothstep(0.2, 0.55, lw)) * 0.75);
+
+        // Great Red Spot, white luminous ring, and the two black specks seen in Nov 1880
+        vec2 g = vec2((Lj - 0.165) * cl / 0.33, (lat - 0.386) / 0.14);
+        float e = length(g);
+        if (e < 2.0) {
+          float ang = atan(g.y, g.x) + t * 0.03 * (1.0 - smoothstep(0.3, 1.2, e));
+          float tex = fbm(vec2(cos(ang), sin(ang)) * e * 2.5 + 4.0, 3);
+          float ring = smoothstep(0.82, 1.0, e) * (1.0 - smoothstep(1.15, 1.7, e));
+          col = mix(col, RING_COL, ring * 0.9);
+          col = mix(col, GRS_COL * (0.94 + 0.12 * tex), 1.0 - smoothstep(0.93, 1.0, e));
+          float s1 = length((g - vec2(-0.685, 0.014)) * vec2(0.33, 0.14));
+          float s2 = length((g - vec2(0.081, 0.286)) * vec2(0.33, 0.14));
+          col = mix(col, BEAD, 1.0 - smoothstep(0.004, 0.007, min(s1, s2)));
+        }
+        return col;
+      }
+
+      vec3 globeSurface(vec2 q, float r) {
+        float z = sqrt(max(0.0, 1.0 - r * r));
+        float b = clamp(q.y, -1.0, 1.0);
+        float lat = asin(b);
+        float cl = max(cos(lat), 0.05);
+        float lon = atan(q.x, z);
+        vec3 col = jupiterMap(lon + uGlobeRot, lat, b, cl);
+        // Brightest toward the centre, darker at the limb opposite the Sun
+        col *= 0.58 + 0.42 * pow(z, 0.45);
+        col *= 1.0 - 0.18 * smoothstep(0.2, 1.0, q.x) * (1.0 - z);
+        for (int i = 0; i < 4; i++) {
+          vec3 s = uShadow[i];
+          if (s.z <= 0.0) continue;
+          float ds = length((q - s.xy) * vec2(1.0, OBL));
+          col = mix(col, SHADOW_COL, s.z * (1.0 - smoothstep(0.042, 0.054, ds)));
+        }
+        return col;
+      }
+
+      vec3 telescope(vec2 p) {
+        // Atmospheric "seeing": the image trembles like at the eyepiece
+        p += (vec2(vnoise(p * 7.0 + uTime * 1.3), vnoise(p * 7.0 - uTime * 1.1 + 9.0)) - 0.5) * uSeeing;
+        vec3 sk = sky(p);
+        vec2 d = p - uGlobeC;
+        vec2 q = vec2(dot(d, EQ), dot(d, UPV) / OBL) / uGlobeR;
+        float r = length(q);
+        float px = 1.5 / (uRes.y * uGlobeR);
+        float disk = 1.0 - smoothstep(1.0 - px, 1.0 + px, r);
+        vec3 col = sk;
+        if (uPlateMix < 1.0) {
+          if (r < 1.0 + px) col = mix(sk, globeSurface(q, r), disk);
+          for (int i = 0; i < 4; i++) {
+            vec3 m = uMoon[i];
+            vec2 mp = uGlobeC + (EQ * m.x + UPV * m.y * OBL) * uGlobeR;
+            float md = length(p - mp) / uGlobeR;
+            float visible = (m.z > 0.0 || length(m.xy) > 1.0) ? 1.0 : 0.0;
+            col = mix(col, MOON_COL, visible * (1.0 - smoothstep(0.038, 0.048, md)));
+          }
+        }
+        if (uPlateMix > 0.0) {
+          vec2 uv = PLATE_C + vec2(d.x / PLATE_ASPECT, d.y) / uZoom;
+          vec3 pc = texture2D(uPlate, uv).rgb;
+          float pm = 1.0 - smoothstep(0.995, 1.02, r);
+          col = mix(col, mix(sk, pc, pm), uPlateMix);
+        }
+        return col;
+      }
+
+      // ---------------- FLIGHT: descent through the cloud decks ----------------
+
+      void layerParams(int i, out float h, out float sc, out float cover, out float op, out vec3 lit, out vec3 dark) {
+        if (i == 0) { h = 4.0; sc = 0.1; cover = 0.5; op = 0.55; lit = vec3(0.86, 0.82, 0.74); dark = vec3(0.62, 0.59, 0.53); }
+        else if (i == 1) { h = 2.0; sc = 0.42; cover = 0.4; op = 1.0; lit = vec3(0.97, 0.94, 0.86); dark = vec3(0.52, 0.5, 0.46); }
+        else if (i == 2) { h = 0.0; sc = 0.33; cover = 0.44; op = 1.0; lit = vec3(0.86, 0.62, 0.44); dark = vec3(0.34, 0.21, 0.14); }
+        else if (i == 3) { h = -2.0; sc = 0.28; cover = 0.46; op = 1.0; lit = vec3(0.58, 0.64, 0.72); dark = vec3(0.12, 0.15, 0.21); }
+        else { h = -4.0; sc = 0.22; cover = 0.4; op = 1.0; lit = vec3(0.8, 0.82, 0.86); dark = vec3(0.1, 0.1, 0.12); }
+      }
+
+      vec3 ambientAt(float y) {
+        vec3 c = vec3(0.035, 0.035, 0.045);
+        c = mix(c, vec3(0.1, 0.12, 0.17), smoothstep(-5.0, -3.0, y));
+        c = mix(c, vec3(0.34, 0.23, 0.16), smoothstep(-2.6, -0.8, y));
+        c = mix(c, vec3(0.62, 0.48, 0.35), smoothstep(-0.4, 1.2, y));
+        c = mix(c, vec3(0.76, 0.72, 0.64), smoothstep(1.6, 3.2, y));
+        c = mix(c, vec3(0.8, 0.76, 0.68), smoothstep(3.6, 4.4, y));
+        return c;
+      }
+
+      float umbra(vec2 w) {
+        if (uEclipse.z <= 0.0) return 1.0;
+        float d = length(w - uEclipse.xy) / uEclipse.z;
+        return mix(0.18, 1.0, smoothstep(0.85, 1.15, d));
+      }
+
+      float skyDisc(vec3 rd, vec3 dir, float r) {
+        return smoothstep(cos(r * 1.12), cos(r * 0.9), dot(rd, normalize(dir)));
+      }
+
+      vec3 background(vec3 ro, vec3 rd) {
+        vec3 up = ambientAt(ro.y + 2.0);
+        vec3 dn = ambientAt(ro.y - 2.0);
+        vec3 c = mix(dn * 0.75, up, smoothstep(-0.5, 0.5, rd.y));
+        float space = smoothstep(3.8, 4.6, ro.y);
+        if (space > 0.0 && rd.y > -0.1) {
+          vec3 sp = mix(vec3(0.7, 0.66, 0.58), vec3(0.015, 0.015, 0.028), smoothstep(-0.03, 0.12, rd.y));
+          vec2 sd = vec2(atan(rd.z, rd.x), asin(clamp(rd.y, -1.0, 1.0))) * 80.0;
+          vec2 id = floor(sd);
+          float h = hash12(id);
+          if (h > 0.97) {
+            float dd = length(fract(sd) - 0.5 - (hash22(id) - 0.5) * 0.6);
+            sp += vec3(0.8) * (1.0 - smoothstep(0.03, 0.12, dd)) * (h - 0.97) * 20.0
+              * smoothstep(0.05, 0.3, rd.y) * (0.6 + uHigh);
+          }
+          // Galilean moons as Trouvelot drew them: plain white discs
+          sp = mix(sp, vec3(0.93, 0.9, 0.78), skyDisc(rd, vec3(-1.0, 0.16, 0.32), 0.035));
+          sp = mix(sp, MOON_COL, skyDisc(rd, vec3(-1.0, 0.1, -0.5), 0.02));
+          sp = mix(sp, vec3(0.72, 0.7, 0.66), skyDisc(rd, vec3(-0.6, 0.3, 1.0), 0.026));
+          // Distant Sun, a fifth of what Earth sees
+          vec3 sunDir = normalize(vec3(-0.4, 0.35, 0.85));
+          float sd2 = max(dot(rd, sunDir), 0.0);
+          sp += vec3(1.0, 0.96, 0.88) * (smoothstep(0.99994, 0.99997, sd2) + pow(sd2, 400.0) * 0.5);
+          c = mix(c, sp, space * smoothstep(-0.1, 0.02, rd.y));
+        }
+        c = mix(c, c * vec3(1.25, 0.82, 0.72), uVortex * 0.6);
+        c *= umbra(ro.xz);
+        if (ro.y < 0.5) c += vec3(0.5, 0.55, 0.7) * uFlash.x * 0.18;
+        return c;
+      }
+
+      vec2 swirl(vec2 w, float tt) {
+        vec2 d = w - uVortexC.xy;
+        float r = length(d);
+        float R = uVortexC.z;
+        float a = (1.6 * exp(-r / R) + tt * 0.12 / (1.0 + r * r / (R * R))) * uVortex;
+        return uVortexC.xy + rot2(a) * d;
+      }
+
+      float baseDens(int i, vec2 w, float sc, int oct) {
+        vec2 q = w * sc;
+        float wp = fbm(q * 0.45 + vec2(float(i) * 3.1, uTime * 0.015), 3);
+        q += (wp - 0.5) * (1.4 + uBass * 1.2);
+        float d = fbm(q + vec2(uTime * 0.01, 0.0), oct);
+        if (i == 1 || i == 4) d = mix(d, 1.0 - worley(q * 1.3 + (wp - 0.5) * 1.5), 0.32);
+        return d;
+      }
+
+      float dens(int i, vec2 w, float sc, int oct) {
+        if (uVortex < 0.01) return baseDens(i, w, sc, oct);
+        // Two-phase flow so the vortex can turn forever without smearing
+        float P = 10.0;
+        float f1 = fract(uTime / P);
+        float f2 = fract(uTime / P + 0.5);
+        float d1 = baseDens(i, swirl(w, f1 * P), sc, oct);
+        float d2 = baseDens(i, swirl(w, f2 * P), sc, oct);
+        return mix(d1, d2, abs(1.0 - 2.0 * f1));
+      }
+
+      vec4 shadeLayer(int i, vec3 ro, vec3 rd, float t, vec3 bg) {
+        float h; float sc; float cover; float op; vec3 lit; vec3 dark;
+        layerParams(i, h, sc, cover, op, lit, dark);
+        vec2 w = ro.xz + rd.xz * t;
+        int oct = t < 10.0 ? 5 : (t < 30.0 ? 4 : 3);
+        float d = dens(i, w, sc, oct);
+        cover -= uMid * 0.1;
+        float a = smoothstep(cover, cover + 0.22, d) * op;
+        if (i == 0) a = op * (0.4 + 0.6 * a);
+        a *= smoothstep(0.04, 0.7, abs(h - ro.y));
+        float top = smoothstep(cover, cover + 0.45, d);
+        bool under = ro.y < h;
+        vec3 c = under ? mix(lit * 0.72, dark, top * 0.8) : mix(dark, lit, top);
+        if (t < 30.0 && uVortex < 0.01 && i > 0) {
+          // Relief: compare with a sample nudged toward the Sun
+          float d2 = baseDens(i, w + vec2(0.5, -0.35), sc, min(oct, 4));
+          c *= 1.0 + clamp((d - d2) * 3.2, -0.45, 0.45) * (1.0 - t / 30.0) * (under ? 0.5 : 1.0);
+        }
+
+        // Trouvelot's band colours, latitude = world z
+        vec3 band = profile(clamp(w.y * 0.02 + 0.06, -0.98, 0.98)) / 0.8;
+        c = mix(c, c * band, uBandTint * (i <= 1 ? 1.0 : 0.4));
+
+        if (i == 4) {
+          // Mercury sea: liquid metal reflecting the plate's bands
+          vec3 rf = reflect(rd, normalize(vec3((d - 0.5) * 0.6, 1.0, (top - 0.5) * 0.6)));
+          vec3 env = profile(clamp(rf.y * 0.95, -0.98, 0.98));
+          vec3 metal = mix(vec3(0.3, 0.31, 0.34), vec3(0.92, 0.93, 0.97), smoothstep(0.4, 0.85, dot(env, vec3(0.33))));
+          metal = mix(metal, vec3(0.6, 0.62, 0.66), smoothstep(10.0, 40.0, t));
+          c = mix(c, metal, 0.7);
+          c *= 0.5 + uWestGlow * 0.5;
+        }
+
+        if (uVortex > 0.01 && i >= 1 && i <= 3) {
+          float r = length(w - uVortexC.xy) / uVortexC.z;
+          float inside = 1.0 - smoothstep(0.85, 1.0, r);
+          float ring = smoothstep(0.8, 1.0, r) * (1.0 - smoothstep(1.1, 1.5, r));
+          float k = i == 3 ? 0.35 : 1.0;
+          c = mix(c, c * VERMILION, inside * uVortex * k);
+          c = mix(c, RING_COL * (under ? 0.62 : 1.0), ring * uVortex * top * 0.8 * k);
+        }
+
+        if (i <= 2) c *= umbra(w);
+
+        if (i == 2 || i == 3) {
+          vec2 fd = w - uFlash.yz;
+          float fl = uFlash.x * exp(-dot(fd, fd) / 40.0);
+          c += vec3(0.72, 0.8, 1.0) * fl * (i == 3 ? 1.5 : 0.6);
+        }
+
+        float f = 1.0 - exp(-t * 0.028);
+        c = mix(c, bg, f);
+        a *= 1.0 - smoothstep(55.0, 90.0, t);
+        return vec4(c, a);
+      }
+
+      // The west cloud: a silver (mercury) cumulus mirroring Trouvelot's bands
+      vec4 westCloud(vec3 ro, vec3 rd, out float tHit, out vec3 glow) {
+        tHit = 1e4;
+        glow = vec3(0.0);
+        if (uWest.w <= 0.0) return vec4(0.0);
+        vec3 oc = uWest.xyz - ro;
+        float R = uWest.w;
+        float tc = dot(oc, rd);
+        float inside = smoothstep(R * 0.75, R * 1.1, length(oc));
+        if (tc < 0.0 || inside <= 0.0) return vec4(0.0);
+        float d2 = max(dot(oc, oc) - tc * tc, 0.0);
+        float dmin = sqrt(d2);
+        // Offset from the centre at closest approach — kept unnormalised so the middle has no singularity
+        vec3 perp = (ro + rd * tc - uWest.xyz) / R;
+        float ang = atan(perp.y, perp.z);
+        float sil = fbm(vec2(cos(ang), sin(ang)) * 2.2 + vec2(uTime * 0.015, 0.0), 4);
+        float Rb = R * (0.66 + 0.5 * sil + uMid * 0.05);
+        float m = (1.0 - smoothstep(Rb * 0.92, Rb * 1.02, dmin)) * inside;
+        float th = sqrt(max(Rb * Rb - d2, 0.0));
+        tHit = tc - th;
+        vec3 hp = ro + rd * tHit;
+        float tex = fbm(perp.zy * 4.0 + vec2(uTime * 0.02, 0.0), 4);
+        float tex2 = fbm(perp.zy * 4.0 + vec2(7.3, uTime * 0.017), 4);
+        vec3 n = normalize((hp - uWest.xyz) / Rb + vec3(0.0, tex - 0.5, tex2 - 0.5) * 0.9);
+        vec3 rf = reflect(rd, n);
+        vec3 env = profile(clamp(rf.y * 0.95, -0.98, 0.98));
+        float lum = dot(env, vec3(0.33));
+        vec3 col = mix(vec3(0.42, 0.44, 0.48), vec3(0.95, 0.96, 1.0), smoothstep(0.35, 0.85, lum));
+        col = mix(col, env * 1.1, 0.25);
+        float fres = pow(1.0 - max(dot(-rd, n), 0.0), 3.0);
+        col += fres * 0.35 + pow(max(dot(rf, normalize(vec3(-0.3, 0.8, 0.5))), 0.0), 30.0) * 0.8;
+        col *= 0.45 + uWestGlow;
+        float fogd = 1.0 - exp(-max(tHit, 0.0) * 0.006);
+        col = mix(col, ambientAt(ro.y), fogd * 0.85);
+        float halo = exp(-max(dmin - Rb, 0.0) / (R * 0.25));
+        glow = vec3(0.75, 0.78, 0.85) * halo * (1.0 - m) * (0.15 + uWestGlow * 0.4) * (1.0 - fogd) * inside;
+        return vec4(col, m);
+      }
+
+      vec3 motes(vec2 p) {
+        vec3 acc = vec3(0.0);
+        for (int i = 0; i < 3; i++) {
+          float fi = float(i);
+          float dpt = fract(fi / 3.0 + uTravel);
+          float sc = mix(22.0, 1.2, dpt);
+          vec2 sp = p * sc + vec2(fi * 13.1, fi * 7.7);
+          vec2 id = floor(sp);
+          vec2 f = fract(sp) - 0.5;
+          vec2 o = hash22(id + fi * 31.0) - 0.5;
+          float h = hash12(id + fi * 17.0);
+          float d = length(f - o * 0.7);
+          float fade = smoothstep(0.0, 0.3, dpt) * (1.0 - smoothstep(0.75, 1.0, dpt));
+          acc += (1.0 - smoothstep(0.01, 0.035 + 0.05 * dpt, d)) * fade * step(0.8, h);
+        }
+        return acc * uMoteTint * uMotes * (0.6 + uHigh * 1.2);
+      }
+
+      vec3 flight(vec2 p) {
+        p = rot2(uCamAng.z) * p;
+        float yaw = uCamAng.x;
+        float pitch = uCamAng.y;
+        vec3 fwd = vec3(-cos(yaw) * cos(pitch), sin(pitch), -sin(yaw) * cos(pitch));
+        vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
+        vec3 up = cross(right, fwd);
+        vec3 rd = normalize(fwd * 1.3 + right * p.x + up * p.y);
+        vec3 ro = uCam;
+        vec3 bg = background(ro, rd);
+
+        float tW;
+        vec3 glow;
+        vec4 wc = westCloud(ro, rd, tW, glow);
+
+        vec3 acc = vec3(0.0);
+        float T = 1.0;
+        int hits = 0;
+        for (int j = 0; j < 5; j++) {
+          int i = rd.y < 0.0 ? j : 4 - j;
+          float h; float sc; float cover; float op; vec3 lit; vec3 dark;
+          layerParams(i, h, sc, cover, op, lit, dark);
+          float dy = h - ro.y;
+          if (dy * rd.y <= 0.0 || abs(rd.y) < 1e-4) continue;
+          float t = dy / rd.y;
+          if (t > 90.0 || t > tW) continue;
+          vec4 L = shadeLayer(i, ro, rd, t, bg);
+          acc += T * L.a * L.rgb;
+          T *= 1.0 - L.a;
+          hits++;
+          if (T < 0.03 || hits >= 2) break;
+        }
+        acc += T * wc.a * wc.rgb;
+        T *= 1.0 - wc.a;
+        vec3 col = acc + T * bg + glow;
+
+        // Inside a deck: volumetric wisps rushing past
+        if (uFog.w > 0.01) {
+          float a = 0.0;
+          for (int k = 0; k < 5; k++) {
+            vec3 pp = ro + rd * (0.25 + float(k) * 0.55);
+            pp.x += uTime * 0.05;
+            float n = vnoise3(pp * 1.3) * 0.6 + vnoise3(pp * 3.1) * 0.4;
+            a += smoothstep(0.35, 0.75, n);
+          }
+          a /= 5.0;
+          vec3 fc = uFog.rgb * (0.8 + 0.4 * a);
+          fc = mix(fc, fc * profile(clamp(rd.y * 0.8 + sin(uTime * 0.1) * 0.1, -0.98, 0.98)) * 1.25, uWestInside);
+          col = mix(col, fc, clamp(uFog.w * (0.55 + 0.6 * a), 0.0, 1.0));
+        }
+        col += motes(p);
+        return col;
+      }
+
+      void main() {
+        vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+        vec3 col = vec3(0.0);
+        if (uFlightMix < 1.0) col = telescope(p);
+        if (uFlightMix > 0.0) col = mix(col, flight(p), uFlightMix);
+        col = mix(col, HAZE_WHITE, uWhite);
+        float v = smoothstep(1.25, 0.35, length(p * vec2(0.85, 1.0)));
+        col *= mix(0.55, 1.0, v);
+        // Lithograph grain
+        col += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 100.0) - 0.5) * 0.035;
+        col *= uFade;
+        gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+      }
+    `
+
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader,
+      depthTest: false,
+      depthWrite: false
+    })
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material))
+
+    const bufferSize = new THREE.Vector2()
+    function syncSize() {
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      renderer.getDrawingBufferSize(bufferSize)
+      uniforms.uRes.value.copy(bufferSize)
+    }
+    syncSize()
+    window.addEventListener("resize", syncSize)
+
+    // ------------------------------------------------------------
+    // AUDIO — digital gain trim (hardware sensitivity can't be set in browser)
+    // https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
+    // ------------------------------------------------------------
+
+    const fftBins = new Float32Array(8)
+    let audioCtx = null
+    let analyser = null
+    let freqData = null
+    let micGainNode = null
+
+    let micSensitivity = Number(localStorage.getItem("hydraMicGain") ?? 3)
+    if (Number.isNaN(micSensitivity)) micSensitivity = 3
+
+    const micPanel = document.getElementById("mic-panel")
+    const micGainInput = document.getElementById("mic-gain")
+    const micGainVal = document.getElementById("mic-gain-val")
+    micGainInput.value = String(micSensitivity)
+    micGainVal.textContent = micSensitivity.toFixed(1)
+
+    function applyMicGain(v) {
+      micSensitivity = v
+      if (micGainNode != null) micGainNode.gain.value = v
+      micGainVal.textContent = v.toFixed(1)
+      localStorage.setItem("hydraMicGain", String(v))
+    }
+
+    micGainInput.addEventListener("input", () => {
+      applyMicGain(Number(micGainInput.value))
+    })
+
+    async function startMic() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true
+        },
+        video: false
+      })
+      audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      micGainNode = audioCtx.createGain()
+      micGainNode.gain.value = micSensitivity
+      analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.78
+      source.connect(micGainNode)
+      micGainNode.connect(analyser)
+      freqData = new Uint8Array(analyser.frequencyBinCount)
+    }
+
+    function sampleFft() {
+      if (analyser == null || freqData == null) return
+      analyser.getByteFrequencyData(freqData)
+      const n = freqData.length
+      const per = Math.floor(n / 8)
+      const scale = 1.2 + micSensitivity * 0.35
+      for (let i = 0; i < 8; i++) {
+        let sum = 0
+        const start = i * per
+        const end = i === 7 ? n : start + per
+        for (let j = start; j < end; j++) sum += freqData[j]
+        const next = Math.min(3.5, ((sum / (end - start)) / 255) * scale)
+        fftBins[i] += (next - fftBins[i]) * 0.4
+      }
+    }
+
+    function bass() {
+      return fftBins[0] * 0.5 + fftBins[1] * 0.35 + fftBins[2] * 0.15
+    }
+    function mids() {
+      return fftBins[2] * 0.25 + fftBins[3] * 0.4 + fftBins[4] * 0.35
+    }
+    function highs() {
+      return fftBins[5] * 0.3 + fftBins[6] * 0.4 + fftBins[7] * 0.3
+    }
+
+    let eBass = 0
+    let eMid = 0
+    let eHigh = 0
+    // Slow followers — a jump above them is a transient (lightning trigger)
+    let sBass = 0
+    let sHigh = 0
+    let eStorm = 0
+
+    function updateEnvelopes(dt) {
+      eBass += (Math.min(1.5, bass() * 1.2) - eBass) * 0.25
+      eMid += (Math.min(1.5, mids() * 1.1) - eMid) * 0.22
+      eHigh += (Math.min(1.5, highs() * 1.25) - eHigh) * 0.3
+      sBass += (eBass - sBass) * Math.min(1, dt * 1.2)
+      sHigh += (eHigh - sHigh) * Math.min(1, dt * 1.2)
+      const stormTarget = Math.min(1, Math.max(0, eBass * 0.6 + eMid * 0.4 - 0.1))
+      eStorm += (stormTarget - eStorm) * Math.min(1, dt * 0.5)
+    }
+
+    // ------------------------------------------------------------
+    // JOURNEY STATE
+    // ------------------------------------------------------------
+
+    let journeyT = Math.min(DURATION, parseClock(params.get("t")))
+    let running = false
+    let paused = false
+    const RATES = [1, 4, 16]
+    let rateIdx = 0
+    let animT = 0
+    let showCaptions = false
+    let captionChapter = -1
+    let captionStartT = 0
+
+    // Galilean moons in disk units; phases chosen so the opening frame matches the plate
+    const MOONS = [
+      { A: 1.35, b: 0.387, ph: -0.501, w: 0.03, s: 1, fadeIn: false },
+      { A: 1.8, b: 0.238, ph: -0.49, w: 0.019, s: 1, fadeIn: true },
+      { A: 2.0, b: 0.512, ph: -0.032, w: 0.012, s: 0.5, fadeIn: false },
+      { A: 3.0, b: 0.15, ph: 3.3, w: 0.006, s: 1, fadeIn: true }
+    ]
+    const SUN2 = [0.158, -0.112]
+    const DIVE_TARGET = [-0.3, 0.08]
+
+    const cam = {
+      pos: new THREE.Vector3(0, 7, 0),
+      yaw: 0,
+      yawRate: 0,
+      vortexC: null,
+      theta: 0,
+      westAnchor: null
+    }
+    let globeAudioRot = 0
+    let travel = 0
+    let flash = 0
+    let flashPos = new THREE.Vector2()
+    let restrike = -1
+    const look = { yaw: 0, pitch: 0, dragging: false, x: 0, y: 0 }
+
+    function wrapPi(a) {
+      return a - Math.PI * 2 * Math.round(a / (Math.PI * 2))
+    }
+
+    function fwd2(yaw) {
+      return [-Math.cos(yaw), -Math.sin(yaw)]
+    }
+
+    function jitter(t, seed) {
+      return (
+        Math.sin(t * 1.7 + seed) * 0.5 +
+        Math.sin(t * 3.9 + seed * 2.3) * 0.3 +
+        Math.sin(t * 7.3 + seed * 4.1) * 0.2
+      )
+    }
+
+    function updateCamera(u, dt) {
+      const speed = track(SPEED, u) * (1 + eBass * 0.6 * track(CONTROL_LOSS, u))
+      const control = track(CONTROL_LOSS, u)
+      const inOrbit = u >= 0.625 && u < 0.815
+
+      if (inOrbit) {
+        const r = track(ORBIT_RADIUS, u)
+        if (cam.vortexC == null) {
+          // Enter tangentially: the wind picks us up where we are
+          const [fx, fz] = fwd2(cam.yaw)
+          cam.theta = Math.atan2(-fx, fz)
+          cam.vortexC = new THREE.Vector2(
+            cam.pos.x - r * Math.cos(cam.theta),
+            cam.pos.z - r * Math.sin(cam.theta)
+          )
+        }
+        cam.theta += (speed / r) * dt
+        cam.pos.x = cam.vortexC.x + r * Math.cos(cam.theta)
+        cam.pos.z = cam.vortexC.y + r * Math.sin(cam.theta)
+        cam.yawRate = speed / r
+        cam.yaw = cam.theta - Math.PI / 2
+      } else {
+        if (u < 0.6) cam.vortexC = null
+        cam.yawRate += (-wrapPi(cam.yaw) * 0.25 - cam.yawRate * 0.9) * dt
+        cam.yaw += cam.yawRate * dt
+        const [fx, fz] = fwd2(cam.yaw)
+        cam.pos.x += fx * speed * dt
+        cam.pos.z += fz * speed * dt
+      }
+
+      const shake = control * (0.03 + eBass * 0.12)
+      const yawJ = jitter(animT * 0.6, 1.3) * control * (0.08 + eBass * 0.25)
+      const vortexW = track(VORTEX, u)
+      cam.pos.y =
+        track(ALT, u) + vortexW * (Math.sin(animT * 0.13) * 0.25 + jitter(animT, 5.1) * shake * 1.5)
+
+      travel += speed * dt * 0.02
+      return {
+        speed,
+        control,
+        yaw: cam.yaw + yawJ + look.yaw,
+        pitch: track(PITCH, u) + jitter(animT * 1.3, 2.2) * shake + look.pitch,
+        roll: -cam.yawRate * 0.9 + jitter(animT * 1.1, 3.7) * shake * 2
+      }
+    }
+
+    function updateLightning(u, dt) {
+      const w = track(LIGHTNING, u)
+      flash *= Math.exp(-dt * 5)
+      if (restrike > 0) {
+        restrike -= dt
+        if (restrike <= 0) flash = Math.max(flash, 0.7 + Math.random() * 0.3)
+      }
+      if (w <= 0) return
+      const onset = eHigh - sHigh > 0.18 || eBass - sBass > 0.22
+      if ((onset && flash < 0.2) || Math.random() < dt * 0.06 * w) {
+        flash = Math.min(1, 0.6 + Math.random() * 0.4) * Math.max(0.35, w)
+        const [fx, fz] = fwd2(cam.yaw)
+        const ahead = 8 + Math.random() * 22
+        const side = (Math.random() - 0.5) * 24
+        flashPos.set(cam.pos.x + fx * ahead - fz * side, cam.pos.z + fz * ahead + fx * side)
+        restrike = Math.random() < 0.5 ? 0.08 + Math.random() * 0.15 : -1
+      }
+    }
+
+    function setFrame(u, dt) {
+      const gt = Math.max(0, (u - 0.075) * DURATION)
+      const zoom = zoomAt(u)
+      const R = PLATE_R_SCREEN * zoom
+
+      uniforms.uFade.value = smooth(0, 0.006, u) * (1 - smooth(0.988, 1, u))
+      uniforms.uPlateMix.value = 1 - smooth(0.055, 0.08, u)
+      uniforms.uFlightMix.value = smooth(0.19, 0.198, u)
+      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.195) / 0.008, 2)) * 0.95
+      uniforms.uZoom.value = zoom
+      uniforms.uGlobeR.value = R
+      uniforms.uGT.value = gt
+
+      // Keep the dive target (west of the central meridian) centred as we fall in
+      const s = smooth(0.12, 0.175, u)
+      const tx = DIVE_TARGET[0]
+      const ty = DIVE_TARGET[1] * 0.9355
+      uniforms.uGlobeC.value.set(
+        -(0.98796 * tx - 0.15471 * ty) * R * s,
+        -(0.15471 * tx + 0.98796 * ty) * R * s
+      )
+
+      if (u > 0.075) globeAudioRot += eBass * dt * 0.03
+      uniforms.uGlobeRot.value = gt * 0.012 + globeAudioRot
+      uniforms.uStorm.value = eStorm
+      uniforms.uSeeing.value =
+        (0.0015 + eHigh * 0.004 + eMid * 0.002) * (1 - uniforms.uFlightMix.value)
+
+      MOONS.forEach((m, i) => {
+        const ph = m.ph + m.w * gt
+        const a = m.A * Math.sin(ph)
+        const z = m.A * Math.cos(ph)
+        uniforms.uMoon.value[i].set(a, m.b, z)
+        const alpha = z > 0 ? (m.fadeIn ? smooth(0, 30, gt) : 1) : 0
+        uniforms.uShadow.value[i].set(a + SUN2[0] * z * m.s, m.b + SUN2[1] * z * m.s, alpha)
+      })
+
+      if (u < 0.185) return null
+
+      const c = updateCamera(u, dt)
+      uniforms.uCam.value.copy(cam.pos)
+      uniforms.uCamAng.value.set(c.yaw, c.pitch, c.roll)
+
+      const vortexW = track(VORTEX, u)
+      uniforms.uVortex.value = cam.vortexC == null ? 0 : vortexW
+      if (cam.vortexC != null) uniforms.uVortexC.value.set(cam.vortexC.x, cam.vortexC.y, 16)
+
+      // Moon shadows sweeping the clouds: an eclipse above the decks, another across the Red Spot
+      const ecl = uniforms.uEclipse.value
+      ecl.set(0, 0, 0)
+      if (u > 0.235 && u < 0.3) {
+        const k = (u - 0.235) / 0.065
+        ecl.set(cam.pos.x - 50 + 80 * k, cam.pos.z + 22 - 36 * k, 8)
+      } else if (u > 0.7 && u < 0.76 && cam.vortexC != null) {
+        const k = (u - 0.7) / 0.06
+        ecl.set(cam.vortexC.x - 30 + 60 * k, cam.vortexC.y + 6 - 12 * k, 5)
+      }
+
+      updateLightning(u, dt)
+      uniforms.uFlash.value.set(flash, flashPos.x, flashPos.y, 0)
+
+      // West cloud, fixed to the west of wherever we are
+      const wd = track(WEST_DIST, u)
+      const westR = 22
+      if (u > 0.79) {
+        uniforms.uWest.value.set(cam.pos.x - wd, -3.0, cam.pos.z, westR)
+      } else {
+        uniforms.uWest.value.set(0, 0, 0, 0)
+      }
+      const westInside = u > 0.79 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 3)) : 0
+      uniforms.uWestInside.value = westInside
+      uniforms.uWestGlow.value = 0.35 + eBass * 0.9
+
+      // Fog when the camera sits inside a deck
+      let fogAmt = 0
+      let fogCol = LAYERS[0].fog
+      for (const L of LAYERS) {
+        const a = L.op * (1 - smooth(0, 0.75, Math.abs(cam.pos.y - L.h)))
+        if (a > fogAmt) {
+          fogAmt = a
+          fogCol = L.fog
+        }
+      }
+      const fog = uniforms.uFog.value
+      if (westInside > fogAmt) {
+        const g = 0.8 + eBass * 0.5
+        fog.set(0.62 * g, 0.64 * g, 0.7 * g, westInside * (0.6 + eMid * 0.3))
+      } else {
+        const red = vortexW * 0.5
+        fog.set(fogCol[0] * (1 + red * 0.25), fogCol[1] * (1 - red * 0.3), fogCol[2] * (1 - red * 0.4), fogAmt)
+      }
+
+      uniforms.uMotes.value = track(MOTES, u)
+      const y = cam.pos.y
+      uniforms.uMoteTint.value.set(
+        y > 1 ? 0.95 : y > -1 ? 0.85 : 0.75,
+        y > 1 ? 0.92 : y > -1 ? 0.7 : 0.78,
+        y > 1 ? 0.85 : y > -1 ? 0.55 : 0.85
+      )
+      uniforms.uTravel.value = travel % 1
+      uniforms.uBandTint.value = track(BAND_TINT, u)
+      return c
+    }
+
+    // ------------------------------------------------------------
+    // HUD — probe readout (H) and text of the piece (T)
+    // ------------------------------------------------------------
+
+    function clock(s) {
+      const m = Math.floor(s / 60)
+      const r = Math.floor(s % 60)
+      return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0")
+    }
+
+    let hudTimer = 0
+    function updateHud(u, ch, c, dt) {
+      hudTimer -= dt
+      if (hudTimer <= 0 && hud.classList.contains("show")) {
+        hudTimer = 0.25
+        const lines = [`<div class="chapter">${CHAPTERS[ch].name}</div>`]
+        if (c == null) {
+          if (ch === 0) {
+            lines.push("Harvard College Observatory · 1 nov 1880 · 21:30")
+            lines.push("distancia 628 millones de km")
+          } else {
+            const alpha = Math.atan(PLATE_R_SCREEN * zoomAt(u) * 0.93)
+            const km = Math.round(71492 * (1 / Math.sin(alpha) - 1))
+            lines.push("aproximación · sin superficie")
+            lines.push(`altitud ${km.toLocaleString("es")} km sobre las nubes`)
+          }
+        } else {
+          const P = 2 * Math.exp(-cam.pos.y * 0.55)
+          const T = Math.max(110, 165 * Math.pow(P, 0.33))
+          const km = -27 * Math.log(P)
+          const kmh = Math.round(150 + c.speed * 150)
+          const heading = Math.round((((270 - (c.yaw * 180) / Math.PI) % 360) + 360) % 360)
+          const ctrl = Math.max(0, Math.min(1, 1 - c.control * 0.85 - c.control * eBass * 0.15))
+          lines.push(`presión ${P.toFixed(P < 1 ? 2 : 1)} bar · ${Math.round(T)} K · ${km >= 0 ? "+" : "−"}${Math.abs(km).toFixed(0)} km`)
+          lines.push(`viento ${kmh} km/h · rumbo ${heading}°`)
+          lines.push(`control <span class="bar"><i style="width:${Math.round(ctrl * 100)}%"></i></span>`)
+        }
+        const rate = RATES[rateIdx] > 1 ? ` · ensayo ×${RATES[rateIdx]}` : ""
+        lines.push(`${clock(journeyT)} / ${clock(DURATION)}${paused ? " · pausa" : ""}${rate}`)
+        hud.innerHTML = lines.join("<br />")
+      }
+
+      if (ch !== captionChapter) {
+        captionChapter = ch
+        captionStartT = journeyT
+        captionEl.textContent = CHAPTERS[ch].line
+      }
+      const since = journeyT - captionStartT
+      const op = showCaptions ? smooth(0, 3, since) * (1 - smooth(14, 18, since)) : 0
+      captionEl.style.opacity = String(op)
+    }
+
+    // ------------------------------------------------------------
+    // CONTROLS
+    // ------------------------------------------------------------
+
+    function jumpTo(t) {
+      journeyT = Math.max(0, Math.min(DURATION, t))
+      captionChapter = -1
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "m" || e.key === "M") micPanel.classList.toggle("open")
+      if (!running) return
+      if (e.key === " ") {
+        paused = !paused
+        e.preventDefault()
+      } else if (e.key === "ArrowRight") {
+        jumpTo(journeyT + (e.shiftKey ? 300 : 30))
+      } else if (e.key === "ArrowLeft") {
+        jumpTo(journeyT - (e.shiftKey ? 300 : 30))
+      } else if (e.key >= "1" && e.key <= "7") {
+        jumpTo(CHAPTERS[Number(e.key) - 1].at * DURATION)
+      } else if (e.key === "t" || e.key === "T") {
+        showCaptions = !showCaptions
+        captionChapter = -1
+      } else if (e.key === "h" || e.key === "H") {
+        hud.classList.toggle("show")
+        hudTimer = 0
+      } else if (e.key === "s" || e.key === "S") {
+        rateIdx = (rateIdx + 1) % RATES.length
+      } else if (e.key === "f" || e.key === "F") {
+        if (document.fullscreenElement == null) document.documentElement.requestFullscreen?.()
+        else document.exitFullscreen?.()
+      }
+    })
+
+    // iPad / concert: triple-tap top-right corner to show/hide panel
+    let cornerTaps = 0
+    let cornerTimer = 0
+    window.addEventListener("pointerdown", (e) => {
+      if (e.clientX < window.innerWidth - 56 || e.clientY > 56) {
+        look.dragging = true
+        look.x = e.clientX
+        look.y = e.clientY
+        return
+      }
+      const now = performance.now()
+      if (now - cornerTimer > 900) cornerTaps = 0
+      cornerTimer = now
+      cornerTaps += 1
+      if (cornerTaps >= 3) {
+        cornerTaps = 0
+        micPanel.classList.toggle("open")
+      }
+    })
+    window.addEventListener("pointermove", (e) => {
+      if (!look.dragging || !running) return
+      look.yaw += (e.clientX - look.x) * 0.003
+      look.pitch -= (e.clientY - look.y) * 0.002
+      look.yaw = Math.max(-0.9, Math.min(0.9, look.yaw))
+      look.pitch = Math.max(-0.5, Math.min(0.5, look.pitch))
+      look.x = e.clientX
+      look.y = e.clientY
+    })
+    window.addEventListener("pointerup", () => {
+      look.dragging = false
+    })
+
+    // Keep an iPad awake for the whole piece
+    let wakeLock = null
+    async function keepAwake() {
+      try {
+        wakeLock = await navigator.wakeLock?.request("screen")
+      } catch {
+        wakeLock = null
+      }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (running && document.visibilityState === "visible") keepAwake()
+    })
+
+    // ------------------------------------------------------------
+    // LOOP
+    // ------------------------------------------------------------
+
+    let lastNow = performance.now()
+    let frameEma = 16
+    let qualityTimer = 0
+
+    function adaptQuality(frameMs, dt) {
+      frameEma += (frameMs - frameEma) * 0.05
+      qualityTimer += dt
+      if (qualityTimer < 1.5) return
+      qualityTimer = 0
+      let next = quality
+      if (frameEma > 26) next = Math.max(0.35, quality * 0.85)
+      else if (frameEma < 15) next = Math.min(MAX_QUALITY, quality * 1.08)
+      if (Math.abs(next - quality) > 0.01) {
+        quality = next
+        renderer.setPixelRatio(quality)
+        syncSize()
+      }
+    }
+
+    function tick(now) {
+      const frameMs = now - lastNow
+      let dt = frameMs * 0.001
+      lastNow = now
+      if (dt > 0.1) dt = 0.1
+
+      const rate = RATES[rateIdx]
+      const jdt = running && !paused ? dt * rate : 0
+      journeyT = Math.min(DURATION, journeyT + jdt)
+      animT += dt * (paused ? 0.25 : rate)
+
+      sampleFft()
+      updateEnvelopes(dt)
+
+      if (!look.dragging) {
+        look.yaw *= 1 - Math.min(1, dt * 0.8)
+        look.pitch *= 1 - Math.min(1, dt * 0.8)
+      }
+
+      const u = journeyT / DURATION
+      const ch = chapterIndex(u)
+      uniforms.uTime.value = animT
+      uniforms.uBass.value = eBass
+      uniforms.uMid.value = eMid
+      uniforms.uHigh.value = eHigh
+      const c = setFrame(u, jdt)
+      if (!running) uniforms.uFade.value = 0.35
+      updateHud(u, ch, c, dt)
+
+      // Resize before drawing: a resize clears the canvas, and presenting that would flash black
+      adaptQuality(frameMs, dt)
+      renderer.render(scene, camera)
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+
+    async function begin(withMic) {
+      errEl.textContent = ""
+      if (withMic) {
+        try {
+          await startMic()
+          if (audioCtx != null && audioCtx.state === "suspended") await audioCtx.resume()
+        } catch {
+          statusEl.textContent = "Sin micrófono"
+        }
+      }
+      ui.classList.add("hidden")
+      document.body.classList.add("running")
+      running = true
+      keepAwake()
+    }
+
+    document.getElementById("start").addEventListener("click", () => begin(true))
+    document.getElementById("start-quiet").addEventListener("click", () => begin(false))
+    if (params.get("autostart") != null) begin(false)
+  </script>
+</body>
+</html>
