@@ -280,7 +280,7 @@
       <p id="err" style="color:#ff9a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
       <div class="keys">
         → más rápido (hasta ×16: todo en 2:30) · ← más lento · Shift + ← → ±30 s ·
-        F finalizar (negro y mosaico, ~25 s) · P pantalla completa · Espacio pausa ·
+        F finalizar (negro y espejos, que se quedan) · G todo a negro · P pantalla completa · Espacio pausa ·
         1–7 capítulos · T texto · H instrumentos · M operador (o 3 toques arriba a la derecha) · Shift+R reiniciar.
         URL: <code>?t=25:00</code> empezar en · <code>?final=grande</code> mosaico grande.
       </div>
@@ -305,7 +305,8 @@
         <button id="op-faster" type="button">▶▶</button>
       </div>
       <button id="op-full" type="button">Pantalla completa</button>
-      <button id="op-end" class="end" type="button">Finalizar</button>
+      <button id="op-end" class="end" type="button">Finalizar · bardo</button>
+      <button id="op-black" class="end" type="button">Negro</button>
     </div>
     <div class="hint">M o 3 toques arriba a la derecha</div>
   </aside>
@@ -1466,9 +1467,9 @@
         col += (rf.y < 0.0 ? emit(uWestT + 400.0) : emit(uLocalT) * 0.4) * (0.15 + fres * 0.7);
         // At kilobars the hot, dense gas is nearly opaque (H₂ collision-induced absorption, free electrons from
         // the alkalis — Bhattacharya et al. 2023): the plume shows first as a warmer glow, then a shape, then a surface
-        float vis = exp(-max(tHit, 0.0) * 0.05);
-        col = mix(col, emit(uLocalT) * 0.5, (1.0 - vis) * 0.85);
-        m *= uWestVis * (0.12 + 0.88 * vis);
+        float vis = exp(-max(tHit, 0.0) * 0.016);
+        col = mix(col, emit(uLocalT) * 0.5, (1.0 - vis) * 0.7);
+        m *= uWestVis * (0.35 + 0.65 * vis);
         float halo = exp(-max(dmin - Rb, 0.0) / (R * (0.3 + 1.4 * (1.0 - vis))));
         glow = emit(uWestT - 300.0) * halo * (1.0 - m) * (0.2 + 0.25 * (1.0 - vis)) * uWestVis * inside;
         return vec4(col, m);
@@ -1684,7 +1685,12 @@
         vec3 col = vec3(0.0);
         if (uFlightMix < 1.0) col = telescope(p);
         if (uFlightMix > 0.0) col = mix(col, flight(p), uFlightMix);
-        col = mix(col, HAZE_WHITE, uWhite);
+        if (uWhite > 0.0) {
+          // Inside the haze: wisps streaming past, thin enough here and there to glimpse what lies beyond
+          float n = fbm(p * 2.4 + vec2(0.0, uTime * 0.12), 4) * 0.6 + fbm(p * 5.2 - vec2(uTime * 0.08, uTime * 0.18), 3) * 0.4;
+          vec3 veil = HAZE_WHITE * (0.62 + 0.3 * n);
+          col = mix(col, veil, uWhite * smoothstep(0.1, 0.5, uWhite * (0.75 + 0.5 * n)));
+        }
         float v = smoothstep(1.25, 0.35, length(p * vec2(0.85, 1.0)));
         col *= mix(0.55, 1.0, v);
         vec3 world = col;
@@ -2126,6 +2132,7 @@
     function resetJourney() {
       journeyT = 0
       ending = null
+      blackout = null
       cam.pos.set(0, 7, 0)
       cam.yaw = 0
       cam.yawRate = 0
@@ -2256,11 +2263,12 @@
     function setFrame(u, jdt, dt) {
       const gt = Math.max(0, (u - 0.08) * DURATION)
       const era = track(ERA, u)
-      const flightMix = smooth(0.186, 0.2, u)
+      // Entry: we sink into the stratospheric haze; the two views are swapped only while it hides everything
+      const flightMix = smooth(0.1895, 0.1955, u)
 
       uniforms.uPlateMix.value = 1 - smooth(0.055, 0.08, u)
       uniforms.uFlightMix.value = flightMix
-      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.193) / 0.006, 2)) * 0.3
+      uniforms.uWhite.value = smooth(0.183, 0.1895, u) * (1 - smooth(0.1955, 0.205, u))
       uniforms.uEra.value = era
       uniforms.uGrain.value = 0.035 - 0.017 * era
       uniforms.uGT.value = gt
@@ -2330,7 +2338,8 @@
       // Revealed over real seconds, whatever the chosen duration or speed: never a sudden rock
       westVis = u > 0.835 ? Math.min(1, westVis + dt / 30) : 0
       uniforms.uWestVis.value = smooth(0, 1, westVis)
-      const westInside = u > 0.83 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 14.5)) : 0
+      // Its incandescent fog thickens exactly as its surface dissolves around us (shader: 0.75–1.1 R)
+      const westInside = u > 0.83 ? 1 - smooth(westR * 0.65, westR * 1.12, Math.hypot(wd, cam.pos.y + 14.5)) : 0
       if (westInside > 0.5) startEnding(50)
 
       // Fog when the camera sits inside a deck
@@ -2355,7 +2364,7 @@
       const fog = uniforms.uFog.value
       if (westInside > fogAmt) {
         const e = emitRGB(uniforms.uWestT.value)
-        fog.set(e[0], e[1], e[2], westInside * (0.6 + aud.mid * 0.3))
+        fog.set(e[0], e[1], e[2], Math.pow(westInside, 0.6) * (1.6 + aud.mid * 0.2))
       } else {
         const red = vortexW * 0.5
         fog.set(fogCol[0] * (1 + red * 0.25), fogCol[1] * (1 - red * 0.3), fogCol[2] * (1 - red * 0.4), fogAmt)
@@ -2396,20 +2405,37 @@
 
     function startEnding(len) {
       if (ending != null || !running) return
-      ending = { t: 0, rot: 0, len }
+      ending = { t: 0, anim: 0, rot: 0, len, release: false }
     }
     // Envelopes are written for 50 s; a shorter ending runs the same score faster
     const endTime = () => (ending == null ? 0 : (ending.t * 50) / ending.len)
+    // The mosaic holds at this point of the score until G lets it go
+    const END_HOLD = 38
 
-    // 0–10 the world goes black (death); at once the glass mosaic opens in the centre of the dark;
-    // from ~42 it gathers into a point and goes out (times in the 50-s score).
+    // G: everything to black. During the bardo the mirrors first gather into a point.
+    let blackout = null
+    function startBlackout() {
+      if (!running || blackout != null) return
+      blackout = { t: 0 }
+      if (ending != null) {
+        ending.release = true
+        if (endTime() > 14) ending.t = Math.max(ending.t, (40 * ending.len) / 50)
+      }
+    }
+
+    // 0–10 the world goes black (death); at once the glass mosaic opens in the centre of the dark
+    // and stays; after G it gathers into a point and goes out (times in the 50-s score).
     function updateEnding(dt) {
+      if (blackout != null) blackout.t += dt
       if (ending == null) {
         uniforms.uBardo.value.set(0, 0, 0, 0)
         uniforms.uBardoDark.value = 0
         return 1
       }
-      ending.t += dt * Math.min(RATES[rateIdx], 2)
+      const step = dt * Math.min(RATES[rateIdx], 2)
+      ending.anim += step
+      ending.t += step
+      if (!ending.release) ending.t = Math.min(ending.t, (END_HOLD * ending.len) / 50)
       const t = endTime()
       ending.rot += dt * (0.05 + 0.1 * aud.loud)
       if (aud.onset > 0.35 && ring.amp < 0.3) {
@@ -2428,7 +2454,8 @@
         smooth(10, 20, t) * (1 - smooth(42, 50, t))
       )
       uniforms.uBardoCyan.value = FINAL_LARGE ? 0.2 : 0.55
-      uniforms.uBardoT.value = t
+      // The facets keep turning while the score holds
+      uniforms.uBardoT.value = (ending.anim * 50) / ending.len
       uniforms.uBardoDark.value = smooth(0, 10, t)
       uniforms.uBardoWave.value.set(ring.r, ring.amp)
       return 1 - smooth(0, 10, t)
@@ -2570,6 +2597,7 @@
     document.getElementById("op-faster").addEventListener("click", () => setRate(rateIdx + 1))
     document.getElementById("op-full").addEventListener("click", toggleFullscreen)
     document.getElementById("op-end").addEventListener("click", () => startEnding(25))
+    document.getElementById("op-black").addEventListener("click", startBlackout)
 
     window.addEventListener("keydown", (e) => {
       if (e.key === "m" || e.key === "M") opPanel.classList.toggle("open")
@@ -2587,6 +2615,8 @@
         jumpTo(CHAPTERS[Number(e.key) - 1].at * DURATION)
       } else if (e.key === "f" || e.key === "F") {
         startEnding(25)
+      } else if (e.key === "g" || e.key === "G") {
+        startBlackout()
       } else if (e.key === "p" || e.key === "P") {
         toggleFullscreen()
       } else if (e.key === "t" || e.key === "T") {
@@ -2698,7 +2728,7 @@
       uniforms.uLoud.value = aud.loud
       const c = setFrame(u, jdt, dt)
       uniforms.uFade.value = running
-        ? smooth(0, 0.006, u) * (1 - smooth(48.5, 50, endTime()))
+        ? smooth(0, 0.006, u) * (1 - smooth(48.5, 50, endTime())) * (blackout == null ? 1 : 1 - smooth(0, 8, blackout.t))
         : 0.35
       updateHud(u, ch, c, dt)
 
