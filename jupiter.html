@@ -275,6 +275,7 @@
         <label class="opt"><input id="opt-hud" type="checkbox" /> Instrumentos</label>
         <label class="opt"><input id="opt-text" type="checkbox" /> Texto de la obra</label>
         <label class="opt"><input id="opt-ps1" type="checkbox" /> Estética PS1</label>
+        <label class="opt"><input id="opt-dose" type="checkbox" checked /> Dosis con los agudos</label>
       </div>
       <p id="err" style="color:#ff9a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
       <div class="keys">
@@ -414,7 +415,7 @@
     ]
     const PITCH = [
       [0.186, -0.3], [0.193, -0.35], [0.2, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12], [0.6, -0.06],
-      [0.65, -0.05], [0.8, -0.12], [0.87, -0.2], [0.9, -0.1], [0.95, -0.04], [0.97, -0.25], [1, -0.35]
+      [0.65, -0.05], [0.7, -0.1], [0.76, -0.2], [0.81, -0.28], [0.87, -0.2], [0.9, -0.1], [0.95, -0.04], [0.97, -0.25], [1, -0.35]
     ]
     const SPEED = [
       [0.198, 0.6], [0.25, 0.38], [0.32, 0.42], [0.45, 0.38], [0.6, 0.45], [0.64, 1.1],
@@ -424,7 +425,7 @@
       [0.6, 0.03], [0.645, 0.3], [0.7, 0.5], [0.8, 0.55], [0.835, 0.15], [0.9, 0.06], [1, 0.04]
     ]
     const VORTEX = [[0.62, 0], [0.645, 1], [0.8, 1], [0.83, 0]]
-    const ORBIT_RADIUS = [[0.625, 30], [0.7, 18], [0.76, 12], [0.815, 18]]
+    const ORBIT_RADIUS = [[0.625, 30], [0.7, 15], [0.78, 12], [0.815, 10]]
     // Where lightning physically happens: shallow storms (Becker 2020), then water clouds and the GRS wake
     const LIGHTNING = [
       [0.48, 0], [0.52, 0.3], [0.6, 0.3], [0.63, 0.05], [0.68, 0.8], [0.74, 0.7], [0.79, 0.2], [0.82, 0]
@@ -642,6 +643,9 @@
       uCamAng: { value: new THREE.Vector3() },
       uVortex: { value: 0 },
       uVortexC: { value: new THREE.Vector3(0, 0, 16) },
+      uFunnel: { value: new THREE.Vector2() },
+      uDose: { value: 0 },
+      uDoseT: { value: 0 },
       uFlash: { value: new THREE.Vector4() },
       uEclipse: { value: new THREE.Vector3() },
       uWest: { value: new THREE.Vector4() },
@@ -711,6 +715,9 @@
       uniform vec3 uCamAng;
       uniform float uVortex;
       uniform vec3 uVortexC;
+      uniform vec2 uFunnel;
+      uniform float uDose;
+      uniform float uDoseT;
       uniform vec4 uFlash;
       uniform vec3 uEclipse;
       uniform vec4 uWest;
@@ -1244,12 +1251,21 @@
       }
 
       float baseDens(int i, vec2 w, float sc, int oct) {
+        // The dose lives in the world, not on the screen: each deck breathes slowly around the viewer,
+        // a little out of step with the others, and its texture starts to flow
+        w = uCam.xz + (w - uCam.xz) * (1.0 + uDose * 0.035 * sin(uTime * 0.19 + float(i) * 1.3));
         // Turbulent energy cascades upscale: sustained sound grows bigger eddies
         vec2 q = w * sc / (1.0 + uTurb * 0.6);
-        float wp = fbm(q * 0.45 + vec2(float(i) * 3.1, uTime * 0.015), 3);
+        float wp = fbm(q * 0.45 + vec2(float(i) * 3.1, uTime * 0.015 + uDoseT * 0.04), 3);
         q += (wp - 0.5) * (1.2 + uTurb * 2.0 + uBass * 0.6);
         float d = fbm(q + vec2(uTime * 0.01, 0.0), oct);
         if (i == 1 || i == 5) d = mix(d, 1.0 - worley(q * 1.3 + (wp - 0.5) * 1.5), 0.32);
+        // …and the clouds lean toward order: a faint honeycomb of Bénard convection cells
+        if (uDose > 0.01) {
+          vec2 hq = q * 1.7 + vec2(uDoseT * 0.015, 0.0);
+          float hex = (cos(hq.x) + cos(0.5 * hq.x + 0.866 * hq.y) + cos(-0.5 * hq.x + 0.866 * hq.y)) / 3.0;
+          d += uDose * 0.13 * (hex - 0.25);
+        }
         return d + waves(w) * (i <= 3 ? 1.0 : 0.4);
       }
 
@@ -1264,6 +1280,88 @@
         return mix(d1, d2, abs(1.0 - 2.0 * f1));
       }
 
+      // The Great Red Spot as a tunnel (artistic licence on Juno's 300–500 km roots, Bolton et al. 2021):
+      // an eyewall ~2,000 km across, straight-sided through the cloud decks, closing into a throat
+      // that opens onto the incandescent deep
+      float funnelR(float y) {
+        return 6.0 + 15.0 * smoothstep(-10.5, -2.5, y);
+      }
+      float funnelF(vec3 p) {
+        return funnelR(p.y) - length(p.xz - uVortexC.xy);
+      }
+      float wallStriae(vec3 p) {
+        vec2 rel = p.xz - uVortexC.xy;
+        // Rigid spin plus a fixed spiral twist, so the bands wind without smearing
+        float a = atan(rel.y, rel.x) - uFunnel.y + p.y * 0.12;
+        vec2 cs = vec2(cos(a), sin(a));
+        float warp = vnoise3(vec3(cs * 1.4, p.y * 0.7 + 3.0));
+        float s = 0.0;
+        float amp = 0.5;
+        float f = 1.0;
+        for (int k = 0; k < 4; k++) {
+          float n = vnoise3(vec3(cs * 2.2 * f, (p.y * 2.6 + warp * 2.2) * f) + float(k) * 7.1);
+          s += (1.0 - abs(2.0 * n - 1.0)) * amp;
+          amp *= 0.5;
+          f *= 2.03;
+        }
+        return s / 0.94;
+      }
+      vec4 funnelWall(vec3 ro, vec3 rd, vec3 bg, out float tHit) {
+        tHit = 1e4;
+        if (uFunnel.x <= 0.0) return vec4(0.0);
+        float t = 0.2;
+        float f0 = funnelF(ro + rd * t);
+        float tPrev = t;
+        bool hit = false;
+        for (int k = 0; k < 44; k++) {
+          float tn = t + max(abs(funnelF(ro + rd * t)) / 3.6, 0.08 + t * 0.03);
+          vec3 p = ro + rd * tn;
+          if (p.y > 5.0 && rd.y > 0.0) break;
+          if (p.y < -11.5 && rd.y < 0.0) break;
+          if (tn > 90.0) break;
+          tPrev = t;
+          t = tn;
+          if (sign(funnelF(p)) != sign(f0)) { hit = true; break; }
+        }
+        if (!hit) return vec4(0.0);
+        float lo = tPrev;
+        float hi = t;
+        for (int k = 0; k < 5; k++) {
+          float m = 0.5 * (lo + hi);
+          if (sign(funnelF(ro + rd * m)) == sign(f0)) lo = m; else hi = m;
+        }
+        t = 0.5 * (lo + hi);
+        vec3 p = ro + rd * t;
+        if (p.y > 4.6 || p.y < -10.8) return vec4(0.0);
+        tHit = t;
+
+        vec2 rel = p.xz - uVortexC.xy;
+        float rr = max(length(rel), 1e-3);
+        float slope = (funnelR(p.y + 0.01) - funnelR(p.y - 0.01)) / 0.02;
+        float s = wallStriae(p);
+        float sU = wallStriae(p + vec3(0.0, 0.06, 0.0));
+        // Facing the open eye: inward normal, tilted by the slope of the throat and by the relief of the bands
+        vec3 n = normalize(vec3(-rel.x / rr, slope + (sU - s) * 9.0, -rel.y / rr) * (f0 > 0.0 ? 1.0 : -1.0));
+        vec3 L = normalize(vec3(-0.4, 1.3, 0.85));
+        float lit = 0.25 + 0.75 * max(dot(n, L), 0.0);
+        float daylight = mix(0.05, 1.0, smoothstep(-8.0, 2.5, p.y));
+
+        // Cream, apricot, rust, umber: Juno's bands of the Spot, redder toward the top (Carlson et al. 2016)
+        vec3 c = mix(vec3(0.24, 0.12, 0.06), vec3(0.64, 0.31, 0.14), smoothstep(0.15, 0.45, s));
+        c = mix(c, vec3(0.9, 0.6, 0.38), smoothstep(0.4, 0.62, s));
+        c = mix(c, vec3(0.96, 0.89, 0.76), smoothstep(0.6, 0.8, s));
+        c = mix(c, c * VERMILION, smoothstep(0.5, 3.5, p.y) * 0.7);
+        c *= lit * daylight;
+        // Heat rises out of the throat: the deep wall glows like lava
+        float Tw = 300.0 + 1250.0 * smoothstep(-3.0, -10.5, p.y) + (s - 0.5) * 350.0 + uConv * 300.0;
+        c += emit(Tw) * 1.3;
+        vec2 fd = p.xz - uFlash.yz;
+        c += vec3(0.72, 0.8, 1.0) * uFlash.x * exp(-dot(fd, fd) / 60.0) * 0.5;
+        c = mix(c, bg, 1.0 - exp(-t * 0.014));
+        float a = uFunnel.x * smoothstep(0.4, 3.0, t) * smoothstep(-10.8, -9.0, p.y) * (1.0 - smoothstep(3.6, 4.6, p.y));
+        return vec4(c, a);
+      }
+
       vec4 shadeLayer(int i, vec3 ro, vec3 rd, float t, vec3 bg) {
         float h; float sc; float cover; float op; vec3 lit; vec3 dark; float Te;
         layerParams(i, h, sc, cover, op, lit, dark, Te);
@@ -1275,6 +1373,11 @@
         cover -= uMid * 0.1 + uConv * 0.12;
         float a = smoothstep(cover, cover + 0.22, d) * op;
         if (i == 0) a = op * (0.4 + 0.6 * a);
+        // The Red Spot's throat is open: no deck inside its walls
+        if (uFunnel.x > 0.0 && i <= 3) {
+          float rw = funnelR(h);
+          a *= mix(1.0, smoothstep(rw - 3.0, rw + 1.0, length(w - uVortexC.xy)), uFunnel.x);
+        }
         a *= smoothstep(0.04, 0.7, abs(h - ro.y));
         float top = smoothstep(cover, cover + 0.45, d);
         bool under = ro.y < h;
@@ -1422,6 +1525,9 @@
         float tW;
         vec3 glow;
         vec4 wc = westCloud(ro, rd, tW, glow);
+        float tF;
+        vec4 fw = funnelWall(ro, rd, bg, tF);
+        if (fw.a > 0.5) tW = min(tW, tF);
 
         vec3 acc = vec3(0.0);
         float T = 1.0;
@@ -1439,6 +1545,10 @@
           T *= 1.0 - L.a;
           hits++;
           if (T < 0.03 || hits >= 2) break;
+        }
+        if (tF < 1e3) {
+          acc += T * fw.a * fw.rgb;
+          T *= 1.0 - fw.a;
         }
         acc += T * wc.a * wc.rgb;
         T *= 1.0 - wc.a;
@@ -1511,8 +1621,11 @@
         float edge = khatam(f, region);
         vec3 c = mirrorFacet(vec3(floor(lp), region), q / size);
         float cellPx = uRes.y * size * max(r, 1e-4) * TAU / N;
-        // Joints between the pieces: a dark drawing on the glitter
-        c *= mix(1.0, 0.25, (1.0 - smoothstep(0.0, max(1.2 / cellPx, 0.025), edge)));
+        // Glass more than silver: a thin body, light caught on the bevels, and a fine joint between pieces
+        float px = max(1.2 / cellPx, 0.025);
+        float bevel = (1.0 - smoothstep(px, px * 4.0 + 0.06, edge)) * smoothstep(0.0, px, edge);
+        c = c * 0.38 + (c * 0.8 + vec3(0.1)) * bevel;
+        c *= mix(1.0, 0.2, 1.0 - smoothstep(0.0, px, edge));
         c = mix(vec3(0.35, 0.36, 0.34) * (0.6 + uBardo.w), c, smoothstep(3.0, 9.0, cellPx));
         return c;
       }
@@ -1567,8 +1680,13 @@
         col = mix(col, HAZE_WHITE, uWhite);
         float v = smoothstep(1.25, 0.35, length(p * vec2(0.85, 1.0)));
         col *= mix(0.55, 1.0, v);
+        vec3 world = col;
         col *= 1.0 - uBardoDark;
-        if (uBardo.x > 0.001) col += bardo(p) * uBardo.x;
+        if (uBardo.x > 0.001) {
+          // Through the glass, faintly, the last of the world
+          float glass = 1.0 - smoothstep(0.9, 1.05, length(p) / max(uBardo.y, 1e-3));
+          col += (bardo(p) * 0.8 + world * 0.1 * glass) * uBardo.x;
+        }
         col += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 100.0) - 0.5) * uGrain;
         col *= uFade;
         gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
@@ -1585,8 +1703,7 @@
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material))
 
     // ------------------------------------------------------------
-    // SECOND PASS — the dose (psilocybin, driven by the high band), trails, and an optional PS1 look
-    // Form constants as plane waves in cortical log-polar coordinates (Bressloff et al. 2001)
+    // SECOND PASS — the dose's colour and tracers, and an optional PS1 look
     // ------------------------------------------------------------
 
     const rtOptions = { depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter }
@@ -1631,29 +1748,18 @@
 
         void main() {
           vec2 uv = gl_FragCoord.xy / uRes;
-          vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
           float d = uDose;
           float t = uTime;
-          float r = length(p) + 1e-4;
-          float th = atan(p.y, p.x);
-          // Stripes in V1 seen through the retino-cortical map: rings (tunnels), rays, spirals, lattices
-          float rings = cos(9.0 * log(r) - t * 0.25);
-          float rays = cos(8.0 * th);
-          float spiral = cos(6.0 * th + 9.0 * log(r) - t * 0.2);
-          float form = mix(mix(spiral, rings * rays, 0.5 + 0.5 * sin(t * 0.031)), rings, 0.25 + 0.25 * sin(t * 0.023 + 2.0));
-          // Surfaces breathe and drift
-          vec2 warp = vec2(sin(p.y * 7.0 + t * 0.21), cos(p.x * 6.0 - t * 0.17)) * 0.006
-            + p * sin(t * 0.13) * 0.012 + (p / r) * form * 0.004;
-          vec2 uvw = uv + warp * d * vec2(uRes.y / uRes.x, 1.0);
+          vec2 uvw = uv;
           vec2 suv = uPS1 > 0.5 ? (floor(uvw * uSceneRes) + 0.5) / uSceneRes : uvw;
           vec3 col = texture2D(uScene, suv).rgb;
+          // Colour deepens and drifts very slowly (the breathing and geometry happen in the clouds themselves)
           float l = dot(col, vec3(0.299, 0.587, 0.114));
-          col = mix(vec3(l), col, 1.0 + 0.8 * d);
-          col = max(hueRotate(col, d * (0.5 * sin(t * 0.04 + r * 2.0) + 0.2 * form)), 0.0);
-          col += col * smoothstep(0.55, 1.0, form) * 0.5 * d * d;
-          // Trails: the previous frame lingers, drawn slightly inward
-          vec3 hist = texture2D(uHist, 0.5 + (uv - 0.5) * (1.0 - 0.004 * d)).rgb;
-          col = max(col, hist * 0.94 * smoothstep(0.05, 0.4, d));
+          col = mix(vec3(l), col, 1.0 + 0.4 * d);
+          col = max(hueRotate(col, d * 0.18 * sin(t * 0.027)), 0.0);
+          // Tracers: what moves leaves a faint wake
+          vec3 hist = texture2D(uHist, uv).rgb;
+          col = max(col, hist * 0.9 * smoothstep(0.25, 0.8, d));
           if (uPS1 > 0.5) {
             // 15-bit colour with ordered dithering on the low-resolution pixel grid
             col = floor(col * 31.0 + bayer4(floor(uvw * uSceneRes)) ) / 31.0;
@@ -1952,7 +2058,8 @@
     }
 
     // Sound as energy for the atmosphere
-    const phys = { C: 0, K: 0, Q: 0, Qth: 1, W: 0, storm: 0, aurora: 0, dose: 0 }
+    const phys = { C: 0, K: 0, Q: 0, Qth: 1, W: 0, storm: 0, aurora: 0, dose: 0, doseT: 0 }
+    let doseOn = true
     // ?dosis=0.8 fixes the dose for rehearsal without sound
     const DOSE_FIXED = params.get("dosis") == null ? null : clamp01(Number(params.get("dosis")) || 0)
     const waveA = [0, 0, 0, 0, 0, 0]
@@ -1963,10 +2070,12 @@
       phys.Q = Math.min(2.5, phys.Q + (0.4 * aud.high + 0.6 * phys.C + 0.02) * dt)   // charge separation
       phys.storm += (clamp01(aud.low * 0.6 + aud.mid * 0.4 - 0.1) - phys.storm) * Math.min(1, dt * 0.5)
       phys.aurora += (0.25 + 1.2 * aud.loud - phys.aurora) * Math.min(1, dt * 2)
-      // The dose: quiet highs keep ordinary vision; strong, sustained highs open the psilocybin view
-      const doseTarget = smooth(0.3, 0.8, aud.high)
+      // The dose: quiet highs keep ordinary vision; strong, sustained highs make the clouds breathe,
+      // flow and lean toward geometry, and colour deepen — in the world, never painted over it
+      const doseTarget = doseOn ? smooth(0.3, 0.8, aud.high) : 0
       phys.dose += (doseTarget - phys.dose) * Math.min(1, dt / (doseTarget > phys.dose ? 4 : 12))
       if (DOSE_FIXED != null) phys.dose = DOSE_FIXED
+      phys.doseT += phys.dose * dt
       for (let i = 0; i < 6; i++) waveA[i] += (0.07 * aud.bands[i] - waveA[i]) * Math.min(1, dt * 1.5)
     }
 
@@ -1990,7 +2099,8 @@
       yaw: 0,
       yawRate: 0,
       vortexC: null,
-      theta: 0
+      theta: 0,
+      funnelSpin: 0
     }
     let travel = 0
     let flash = 0
@@ -2168,6 +2278,10 @@
       const vortexW = track(VORTEX, u)
       uniforms.uVortex.value = cam.vortexC == null ? 0 : vortexW
       if (cam.vortexC != null) uniforms.uVortexC.value.set(cam.vortexC.x, cam.vortexC.y, 16)
+      // The eyewall turns a little slower than the wind that carries us, so it slides past
+      const funnelA = cam.vortexC == null ? 0 : smooth(0.625, 0.66, u) * (1 - smooth(0.82, 0.84, u))
+      if (cam.vortexC != null) cam.funnelSpin += (0.6 * c.speed / track(ORBIT_RADIUS, u)) * jdt
+      uniforms.uFunnel.value.set(funnelA, cam.funnelSpin)
 
       // Moon shadows sweeping the clouds: an eclipse above the decks, another across the Red Spot
       const ecl = uniforms.uEclipse.value
@@ -2212,6 +2326,15 @@
         if (a > fogAmt) {
           fogAmt = a
           fogCol = L.T != null ? emitRGB(L.T) : L.fog.map((v) => v * (0.12 + 0.88 * day))
+        }
+      }
+      // Crossing the eyewall is crossing a cloud
+      if (funnelA > 0) {
+        const rw = 6 + 15 * smooth(-10.5, -2.5, cam.pos.y)
+        const wall = funnelA * (1 - smooth(0.6, 2.8, Math.abs(Math.hypot(cam.pos.x - cam.vortexC.x, cam.pos.z - cam.vortexC.y) - rw)))
+        if (wall > fogAmt) {
+          fogAmt = wall
+          fogCol = [0.62 * (0.2 + 0.8 * day), 0.42 * (0.2 + 0.8 * day), 0.3 * (0.2 + 0.8 * day)]
         }
       }
       const fog = uniforms.uFog.value
@@ -2263,7 +2386,7 @@
     // Envelopes are written for 50 s; a shorter ending runs the same score faster
     const endTime = () => (ending == null ? 0 : (ending.t * 50) / ending.len)
 
-    // 0–12 the world goes black (death); 12–20 nothing; then the mirror mosaic opens in the centre of the dark;
+    // 0–10 the world goes black (death); at once the glass mosaic opens in the centre of the dark;
     // from ~42 it gathers into a point and goes out (times in the 50-s score).
     function updateEnding(dt) {
       if (ending == null) {
@@ -2282,16 +2405,16 @@
       ring.amp *= Math.exp(-dt * 0.8)
       const gather = smooth(41, 49, t)
       const size = FINAL_LARGE ? 0.62 : 0.08
-      const grow = 1 - Math.pow(1 - smooth(20, 34, t), 3)
+      const grow = 1 - Math.pow(1 - smooth(9, 24, t), 3)
       uniforms.uBardo.value.set(
-        smooth(20, 30, t) * (1 - smooth(41, 48, t)),
+        smooth(9, 14, t) * (1 - smooth(41, 48, t)),
         size * (FINAL_LARGE ? grow : 0.55 + 0.45 * grow) * (1 - 0.9 * gather),
         ending.rot,
-        smooth(22, 32, t) * (1 - smooth(42, 50, t))
+        smooth(10, 20, t) * (1 - smooth(42, 50, t))
       )
       uniforms.uBardoCyan.value = FINAL_LARGE ? 0.2 : 0.55
       uniforms.uBardoT.value = t
-      uniforms.uBardoDark.value = smooth(0, 12, t)
+      uniforms.uBardoDark.value = smooth(0, 10, t)
       uniforms.uBardoWave.value.set(ring.r, ring.amp)
       return 1 - smooth(0, 10, t)
     }
@@ -2562,6 +2685,8 @@
 
       compUniforms.uTime.value = animT
       compUniforms.uDose.value = phys.dose
+      uniforms.uDose.value = phys.dose
+      uniforms.uDoseT.value = phys.doseT
       adaptQuality(frameMs, dt)
       draw()
       requestAnimationFrame(tick)
@@ -2580,6 +2705,7 @@
       hud.classList.toggle("show", document.getElementById("opt-hud").checked)
       showCaptions = document.getElementById("opt-text").checked
       if (document.getElementById("opt-ps1").checked) setPS1(true)
+      doseOn = document.getElementById("opt-dose").checked
       if (withMic) {
         try {
           await startMic()
