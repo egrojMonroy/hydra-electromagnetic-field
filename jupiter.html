@@ -650,6 +650,7 @@
       uEclipse: { value: new THREE.Vector3() },
       uWest: { value: new THREE.Vector4() },
       uWestT: { value: 2700 },
+      uWestVis: { value: 0 },
       uFog: { value: new THREE.Vector4() },
       uMotes: { value: 0 },
       uMoteTint: { value: new THREE.Vector3(1, 1, 1) },
@@ -722,6 +723,7 @@
       uniform vec3 uEclipse;
       uniform vec4 uWest;
       uniform float uWestT;
+      uniform float uWestVis;
       uniform vec4 uFog;
       uniform float uMotes;
       uniform vec3 uMoteTint;
@@ -1462,10 +1464,13 @@
         // Liquid-iron sheen: the incandescent deck below mirrored in the droplets
         float fres = pow(1.0 - max(dot(-rd, n), 0.0), 3.0);
         col += (rf.y < 0.0 ? emit(uWestT + 400.0) : emit(uLocalT) * 0.4) * (0.15 + fres * 0.7);
-        float fogd = 1.0 - exp(-max(tHit, 0.0) * 0.006);
-        col = mix(col, emit(uLocalT) * 0.5, fogd * 0.7);
-        float halo = exp(-max(dmin - Rb, 0.0) / (R * 0.25));
-        glow = emit(uWestT - 300.0) * halo * (1.0 - m) * 0.35 * (1.0 - fogd) * inside;
+        // At kilobars the hot, dense gas is nearly opaque (H₂ collision-induced absorption, free electrons from
+        // the alkalis — Bhattacharya et al. 2023): the plume shows first as a warmer glow, then a shape, then a surface
+        float vis = exp(-max(tHit, 0.0) * 0.05);
+        col = mix(col, emit(uLocalT) * 0.5, (1.0 - vis) * 0.85);
+        m *= uWestVis * (0.12 + 0.88 * vis);
+        float halo = exp(-max(dmin - Rb, 0.0) / (R * (0.3 + 1.4 * (1.0 - vis))));
+        glow = emit(uWestT - 300.0) * halo * (1.0 - m) * (0.2 + 0.25 * (1.0 - vis)) * uWestVis * inside;
         return vec4(col, m);
       }
 
@@ -1527,6 +1532,8 @@
         vec4 wc = westCloud(ro, rd, tW, glow);
         float tF;
         vec4 fw = funnelWall(ro, rd, bg, tF);
+        // Only a solid-looking surface hides the decks behind it, so nothing is cut out while it is still haze
+        if (wc.a < 0.5) tW = 1e4;
         if (fw.a > 0.5) tW = min(tW, tF);
 
         vec3 acc = vec3(0.0);
@@ -1919,15 +1926,19 @@
     }
 
     const planetCam = { d: 18.44, F: 7.15 }
+    const Y_AXIS = new THREE.Vector3(0, 1, 0)
     const _m4 = new THREE.Matrix4()
     const _target = new THREE.Vector3()
     const _up = new THREE.Vector3()
     function updatePlanetCamera(u) {
       const [mu, logAlt, fov, fx, fy, fz, ux, uy, uz] = planetKeyAt(u)
       const d = 1 + Math.exp(logAlt)
-      const pos = uniforms.uPCam.value.copy(gcPos(mu, d))
-      _target.set(fx, fy, fz).normalize().add(pos)
-      _m4.lookAt(pos, _target, _up.set(ux, uy, uz).normalize())
+      // One full turn around the planet while closing in and climbing north: crescent, full day side
+      // with the Red Spot, crescent again, then the night side — the great circle is rejoined after 360°
+      const lap = Math.PI * 2 * smooth(0.1, 0.152, u)
+      const pos = uniforms.uPCam.value.copy(gcPos(mu, d)).applyAxisAngle(Y_AXIS, lap)
+      _target.set(fx, fy, fz).normalize().applyAxisAngle(Y_AXIS, lap).add(pos)
+      _m4.lookAt(pos, _target, _up.set(ux, uy, uz).normalize().applyAxisAngle(Y_AXIS, lap))
       uniforms.uPRight.value.setFromMatrixColumn(_m4, 0)
       uniforms.uPUp.value.setFromMatrixColumn(_m4, 1)
       uniforms.uPFwd.value.setFromMatrixColumn(_m4, 2).negate()
@@ -2103,6 +2114,7 @@
       funnelSpin: 0
     }
     let travel = 0
+    let westVis = 0
     let flash = 0
     const flashPos = new THREE.Vector2()
     let restrike = -1
@@ -2315,6 +2327,9 @@
       if (u > 0.83) uniforms.uWest.value.set(cam.pos.x - wd, -14.5, cam.pos.z, westR)
       else uniforms.uWest.value.set(0, 0, 0, 0)
       uniforms.uWestT.value = 2700 + 400 * phys.C
+      // Revealed over real seconds, whatever the chosen duration or speed: never a sudden rock
+      westVis = u > 0.835 ? Math.min(1, westVis + dt / 30) : 0
+      uniforms.uWestVis.value = smooth(0, 1, westVis)
       const westInside = u > 0.83 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 14.5)) : 0
       if (westInside > 0.5) startEnding(50)
 
@@ -2438,6 +2453,7 @@
 
     function zoneNote(alt, P, T, vortexW) {
       if (vortexW > 0.5) return "Gran Mancha Roja · anillo exterior ~650 km/h (Wong 2021) · raíces de 300–500 km (Juno)"
+      if (vortexW > 0.02) return "base de la Mancha Roja (~500 km, Parisi 2021) · un anticiclón es frío arriba y cálido abajo (Bolton 2021)"
       if (alt > 4.3) return "estratosfera · bruma fotoquímica sobre la tropopausa"
       if (alt > 2.6) return "tropopausa · ~110 K"
       if (alt > 1.0) return "nubes de hielo de amoníaco (NH₃)"
@@ -2445,8 +2461,10 @@
       if (alt > -3.0) return "nubes de agua (H₂O) · relámpagos"
       if (P < 30) return "Galileo · última señal a 22 bar y 428 K (1995)"
       if (T < 798) return "oscuridad · la luz del Sol no llega"
-      if (alt > -11) return "punto de Draper (798 K) · el gas empieza a brillar"
-      if (alt > -13.5) return "nubes de sulfuro de sodio (Na₂S)"
+      if (alt > -9.6) return "punto de Draper (798 K) · el gas empieza a brillar"
+      if (alt > -10.65) return "nubes de sal · NaCl (~400 bar)"
+      if (alt > -11.3) return "nubes de sal · KCl (~700 bar) · el gas casi opaco: álcalis muy escasos (Bhattacharya 2023)"
+      if (alt > -13.5) return "zona mineral, 1–2 kbar · espinela, albita, leucita, Na₂S (arXiv 2608.06600)"
       if (alt > -18) return "nubes de silicato · forsterita líquida"
       if (alt > -20.5) return "lluvia de hierro líquido"
       return "hacia el hidrógeno metálico · lluvia de helio (Militzer)"
@@ -2462,7 +2480,8 @@
         `época ${Math.round(1880 + era * 139)}${era >= 1 ? " · mapa Hubble/OPAL" : ""}`,
         `altitud ${altKm.toLocaleString("es")} km sobre las nubes`
       ]
-      if (u > 0.13 && u < 0.155) lines.push('<span class="note">lado nocturno · aurora y relámpagos del norte (Brown et al. 2018)</span>')
+      if (u > 0.105 && u < 0.14) lines.push('<span class="note">una vuelta al planeta · creciente, lado de día, creciente</span>')
+      else if (u >= 0.14 && u < 0.155) lines.push('<span class="note">lado nocturno · aurora y relámpagos del norte (Brown et al. 2018)</span>')
       else if (u >= 0.155 && u < 0.17) lines.push('<span class="note">amanecer sobre el polo · 8 ciclones alrededor de 1 (Adriani et al. 2018)</span>')
       else if (u >= 0.17) lines.push('<span class="note">perijove · hacia la entrada de Galileo, 6,5°N (1995)</span>')
       return lines
