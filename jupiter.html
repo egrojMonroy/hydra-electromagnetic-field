@@ -2412,10 +2412,10 @@
     // The mosaic holds at this point of the score until G lets it go
     const END_HOLD = 38
 
-    // G: everything to black. During the bardo the mirrors first gather into a point.
+    // G: everything to black. Only works during the bardo (when mirrors are showing).
     let blackout = null
     function startBlackout() {
-      if (!running || blackout != null) return
+      if (!running || blackout != null || ending == null) return
       blackout = { t: 0 }
       if (ending != null) {
         ending.release = true
@@ -2771,7 +2771,8 @@
 
     document.getElementById("start").addEventListener("click", () => begin(true))
     document.getElementById("start-quiet").addEventListener("click", () => begin(false))
-    if (params.get("autostart") != null) begin(false)
+    // No autostart: space to begin. The image waits on screen.
+    // if (params.get("autostart") != null) begin(false)
   </script>
 </body>
 </html>
