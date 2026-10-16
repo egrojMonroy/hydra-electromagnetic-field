@@ -93,6 +93,11 @@
       cursor: pointer;
     }
     .opt input { accent-color: #e5a882; width: 1rem; height: 1rem; }
+    .opts { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; justify-content: center; max-width: 34rem; margin: 0.4rem auto 0; }
+    .opt select {
+      background: #15110e; color: #e6dcc4; border: 1px solid #4a3f33;
+      font: inherit; font-size: 0.85rem; padding: 0.2rem 0.3rem;
+    }
     #status {
       position: fixed;
       top: 1rem;
@@ -246,31 +251,44 @@
         The planet Jupiter. Observed November 1, 1880, at 9h. 30m. P.M. — E. L. Trouvelot
       </div>
       <p>
-        Un descenso de 40 minutos que empieza en la lámina de Trouvelot (1880) y se vuelve real:
-        el mapa del Hubble, la órbita de Juno sobre los ciclones polares, la entrada de la sonda Galileo,
-        las nubes de amoníaco y de hidrosulfuro de amonio, el viento de la Gran Mancha Roja
-        y la capa profunda, donde las nubes son de roca y de hierro incandescentes.
-        El sonido es energía para la atmósfera: convección, turbulencia, carga eléctrica y ondas.
+        Un descenso lento que empieza en la lámina de Trouvelot (1880) y se vuelve real:
+        el mapa del Hubble, la órbita de Juno por el lado nocturno, el amanecer sobre los ciclones del polo norte,
+        la entrada de la sonda Galileo, las nubes de amoníaco y de hidrosulfuro de amonio, el viento de la Gran Mancha Roja
+        y la capa profunda, hasta la nube oeste: una roca incandescente donde empieza el bardo.
+        El sonido es energía para la atmósfera; los agudos son la dosis.
       </p>
       <div class="actions">
         <button id="start" type="button">Iniciar con micrófono</button>
         <button id="start-quiet" type="button">Iniciar sin micrófono</button>
         <a class="btn" href="index.html">Inicio</a>
       </div>
-      <label class="opt"><input id="opt-full" type="checkbox" checked /> Pantalla completa</label>
+      <div class="opts">
+        <label class="opt">Duración
+          <select id="opt-min">
+            <option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option>
+            <option value="25">25 min</option><option value="30">30 min</option><option value="35">35 min</option>
+            <option value="40" selected>40 min</option><option value="45">45 min</option><option value="50">50 min</option>
+            <option value="60">60 min</option>
+          </select>
+        </label>
+        <label class="opt"><input id="opt-full" type="checkbox" checked /> Pantalla completa</label>
+        <label class="opt"><input id="opt-hud" type="checkbox" /> Instrumentos</label>
+        <label class="opt"><input id="opt-text" type="checkbox" /> Texto de la obra</label>
+        <label class="opt"><input id="opt-ps1" type="checkbox" /> Estética PS1</label>
+      </div>
       <p id="err" style="color:#ff9a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
       <div class="keys">
         → más rápido (hasta ×16: todo en 2:30) · ← más lento · Shift + ← → ±30 s ·
-        F finalizar (fundido a negro y mosaico, 50 s) · P pantalla completa · Espacio pausa ·
+        F finalizar (negro y mosaico, ~25 s) · P pantalla completa · Espacio pausa ·
         1–7 capítulos · T texto · H instrumentos · M operador (o 3 toques arriba a la derecha) · Shift+R reiniciar.
-        URL: <code>?min=40</code> duración · <code>?t=25:00</code> empezar en · <code>?final=grande</code> mosaico grande.
+        URL: <code>?t=25:00</code> empezar en · <code>?final=grande</code> mosaico grande.
       </div>
       <div class="credits">
         Lámina IX: E. L. Trouvelot, 1881. Mapa global 2019: NASA, ESA, A. Simon (GSFC), M. H. Wong (UC Berkeley), OPAL.
       </div>
     </div>
   </div>
-  <div id="hud" class="show"></div>
+  <div id="hud"></div>
   <div id="speed"></div>
   <div id="caption"></div>
 
@@ -310,8 +328,7 @@
 
     const params = new URLSearchParams(location.search)
     const minutes = Number(params.get("min") ?? 40)
-    const DURATION = (Number.isFinite(minutes) && minutes > 0 ? minutes : 40) * 60
-    const END_SECONDS = 50
+    let DURATION = (Number.isFinite(minutes) && minutes > 0 ? minutes : 40) * 60
     // ?final=grande: the large mirror dome instead of a small jewel in the dark
     const FINAL_LARGE = params.get("final") === "grande"
 
@@ -393,22 +410,21 @@
       [0.198, 6.5], [0.24, 5.4], [0.3, 4.5], [0.33, 3.4], [0.37, 2.6], [0.4, 2.35],
       [0.43, 1.6], [0.47, 1.25], [0.52, 0.6], [0.55, 0.35], [0.58, -0.4], [0.62, -0.75],
       [0.65, -0.9], [0.7, -1.3], [0.76, -1.7], [0.79, -2.6], [0.81, -5.5], [0.825, -8],
-      [0.84, -9], [0.87, -11.3], [0.885, -12.6], [0.91, -14], [0.95, -15.8], [0.965, -17.4],
-      [0.975, -19.9], [0.981, -21.5], [1, -23]
+      [0.84, -9], [0.87, -11.3], [0.885, -12.6], [0.91, -13.6], [0.95, -14.3], [1, -14.5]
     ]
     const PITCH = [
-      [0.198, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12], [0.6, -0.06],
+      [0.186, -0.3], [0.193, -0.35], [0.2, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12], [0.6, -0.06],
       [0.65, -0.05], [0.8, -0.12], [0.87, -0.2], [0.9, -0.1], [0.95, -0.04], [0.97, -0.25], [1, -0.35]
     ]
     const SPEED = [
-      [0.198, 0.9], [0.25, 0.55], [0.32, 0.6], [0.45, 0.55], [0.6, 0.7], [0.64, 2.2],
-      [0.72, 3.2], [0.8, 3.6], [0.83, 1.2], [0.9, 0.8], [0.95, 0.6], [0.97, 0.3], [1, 0.1]
+      [0.198, 0.6], [0.25, 0.38], [0.32, 0.42], [0.45, 0.38], [0.6, 0.45], [0.64, 1.1],
+      [0.72, 1.5], [0.8, 1.7], [0.83, 0.7], [0.9, 0.5], [0.95, 0.35], [1, 0.25]
     ]
     const CONTROL_LOSS = [
-      [0.6, 0.04], [0.645, 0.55], [0.7, 0.9], [0.8, 1.0], [0.835, 0.25], [0.9, 0.1], [1, 0.05]
+      [0.6, 0.03], [0.645, 0.3], [0.7, 0.5], [0.8, 0.55], [0.835, 0.15], [0.9, 0.06], [1, 0.04]
     ]
     const VORTEX = [[0.62, 0], [0.645, 1], [0.8, 1], [0.83, 0]]
-    const ORBIT_RADIUS = [[0.625, 26], [0.7, 12], [0.76, 7], [0.815, 14]]
+    const ORBIT_RADIUS = [[0.625, 30], [0.7, 18], [0.76, 12], [0.815, 18]]
     // Where lightning physically happens: shallow storms (Becker 2020), then water clouds and the GRS wake
     const LIGHTNING = [
       [0.48, 0], [0.52, 0.3], [0.6, 0.3], [0.63, 0.05], [0.68, 0.8], [0.74, 0.7], [0.79, 0.2], [0.82, 0]
@@ -420,7 +436,8 @@
     // Mushballs fall from the 1–2 bar storms and melt by tens of bars (Guillot 2020); iron rains below the silicates
     const RAIN = [[0.5, 0], [0.55, 0.4], [0.62, 0.5], [0.7, 0.6], [0.78, 0.25], [0.82, 0], [0.955, 0], [0.97, 0.45], [0.98, 0.55]]
     const BAND_TINT = [[0.198, 1], [0.33, 0.8], [0.45, 0.3], [0.6, 0.15], [0.7, 0.1]]
-    const WEST_DIST = [[0.83, 160], [0.9, 70], [0.94, 25], [0.952, 6], [0.96, 0]]
+    const WEST_DIST = [[0.83, 160], [0.9, 70], [0.94, 25]]
+    const MAP_MIX = [[0.19, 1], [0.3, 0.8], [0.42, 0.4], [0.55, 0.1]]
     const ERA = [[0.085, 0], [0.135, 1]]
 
     // ------------------------------------------------------------
@@ -483,7 +500,7 @@
 
     // Decks as the shader draws them; T marks the incandescent deep clouds (Visscher, Lodders & Fegley 2010)
     const LAYERS = [
-      { h: 4.0, op: 0.55, fog: [0.82, 0.78, 0.7] },
+      { h: 4.0, op: 0.55, fog: [0.74, 0.78, 0.86] },
       { h: 2.0, op: 1.0, fog: [0.9, 0.88, 0.81] },
       { h: 0.0, op: 1.0, fog: [0.64, 0.45, 0.32] },
       { h: -2.0, op: 1.0, fog: [0.3, 0.36, 0.45] },
@@ -510,10 +527,11 @@
       antialias: false,
       powerPreference: "high-performance"
     })
-    const MAX_QUALITY = Math.min(window.devicePixelRatio, 1.5)
-    let quality = MAX_QUALITY * 0.7
-    renderer.setPixelRatio(quality)
+    // The canvas stays put; only the scene's own render target changes resolution
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25))
     renderer.setSize(window.innerWidth, window.innerHeight)
+    let quality = 0.75
+    let ps1 = false
     document.body.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
@@ -645,8 +663,11 @@
       uBardoT: { value: 0 },
       uBardoDark: { value: 0 },
       uBardoWave: { value: new THREE.Vector2() },
-      uStrands: { value: new THREE.Vector2() },
-      uBardoCyan: { value: 1 }
+      uBardoCyan: { value: 0.55 },
+      uEntry: { value: new THREE.Vector2() },
+      uMapMix: { value: 1 },
+      uCamLon: { value: 0 },
+      uFocal: { value: 1.3 }
     }
 
     const fragmentShader = /* glsl */ `
@@ -711,8 +732,11 @@
       uniform float uBardoT;
       uniform float uBardoDark;
       uniform vec2 uBardoWave;
-      uniform vec2 uStrands;
       uniform float uBardoCyan;
+      uniform vec2 uEntry;
+      uniform float uMapMix;
+      uniform float uCamLon;
+      uniform float uFocal;
 
       const float PI = 3.14159265;
       const float TAU = 6.28318531;
@@ -737,7 +761,7 @@
       const vec3 CUMULUS = vec3(0.91, 0.88, 0.78);
       const vec3 BEAD = vec3(0.17, 0.16, 0.13);
       const vec3 MOON_COL = vec3(0.93, 0.92, 0.86);
-      const vec3 HAZE_WHITE = vec3(0.88, 0.85, 0.77);
+      const vec3 HAZE_WHITE = vec3(0.7, 0.75, 0.82);
       const vec3 VERMILION = vec3(1.0, 0.6, 0.48);
 
       float hash12(vec2 p) {
@@ -998,7 +1022,7 @@
         float lod = log2(max(foot * 326.0, 1.0));
         vec3 real = junoPole(latG, lon, realMap(latG, lon, lod));
         // Below the map's ~220 km pixels: zonally stretched filaments and convective cells
-        float det = smoothstep(0.0035, 0.0003, foot);
+        float det = smoothstep(0.0035, 0.0003, foot) * smoothstep(radians(80.0), radians(70.0), abs(latG));
         if (det > 0.0) {
           float cl = max(cos(latG), 0.1);
           vec2 q = vec2(lon * cl, latG) * 160.0;
@@ -1041,7 +1065,9 @@
           vec3 hs = hp * sc;
           vec3 n = normalize(hp * vec3(1.0, 1.0 / (OBL * OBL), 1.0));
           float latG = asin(clamp(n.y, -1.0, 1.0));
-          float lon = atan(hs.x, hs.z) - uRot;
+          // Longitude measured from the camera's own meridian, so the atan branch cut stays behind it
+          vec2 rel = vec2(hs.x * cos(uCamLon) - hs.z * sin(uCamLon), hs.x * sin(uCamLon) + hs.z * cos(uCamLon));
+          float lon = uCamLon + atan(rel.x, rel.y) - uRot;
           float mu = max(dot(n, -rd), 0.0);
           float foot = t / (uPF * uRes.y) / max(mu, 0.12);
           vec3 s = surfaceColor(hs, latG, lon, foot);
@@ -1127,7 +1153,7 @@
         Te = 0.0;
         lit = vec3(0.0);
         dark = vec3(0.0);
-        if (i == 0) { h = 4.0; sc = 0.1; cover = 0.5; op = 0.55; lit = vec3(0.86, 0.82, 0.74); dark = vec3(0.62, 0.59, 0.53); }
+        if (i == 0) { h = 4.0; sc = 0.1; cover = 0.5; op = 0.55; lit = vec3(0.8, 0.83, 0.88); dark = vec3(0.55, 0.58, 0.64); }
         else if (i == 1) { h = 2.0; sc = 0.42; cover = 0.4; op = 1.0; lit = vec3(0.97, 0.94, 0.86); dark = vec3(0.52, 0.5, 0.46); }
         else if (i == 2) { h = 0.0; sc = 0.33; cover = 0.44; op = 1.0; lit = vec3(0.86, 0.62, 0.44); dark = vec3(0.34, 0.21, 0.14); }
         else if (i == 3) { h = -2.0; sc = 0.28; cover = 0.46; op = 1.0; lit = vec3(0.58, 0.64, 0.72); dark = vec3(0.12, 0.15, 0.21); }
@@ -1143,7 +1169,7 @@
         c = mix(c, vec3(0.34, 0.23, 0.16), smoothstep(-2.6, -0.8, y));
         c = mix(c, vec3(0.62, 0.48, 0.35), smoothstep(-0.4, 1.2, y));
         c = mix(c, vec3(0.76, 0.72, 0.64), smoothstep(1.6, 3.2, y));
-        c = mix(c, vec3(0.8, 0.76, 0.68), smoothstep(3.6, 4.4, y));
+        c = mix(c, vec3(0.66, 0.71, 0.8), smoothstep(3.6, 4.4, y));
         return c;
       }
 
@@ -1163,7 +1189,8 @@
         vec3 c = mix(dn * 0.75, up, smoothstep(-0.5, 0.5, rd.y)) * uSunLight;
         float space = smoothstep(3.8, 4.6, ro.y);
         if (space > 0.0 && rd.y > -0.1) {
-          vec3 sp = mix(vec3(0.7, 0.66, 0.58), vec3(0.015, 0.015, 0.028), smoothstep(-0.03, 0.12, rd.y));
+          // Rayleigh-blue limb, as seen from orbit, darkening to space overhead
+          vec3 sp = mix(vec3(0.56, 0.64, 0.78), vec3(0.012, 0.016, 0.032), smoothstep(-0.03, 0.16, rd.y));
           vec2 sd = vec2(atan(rd.z, rd.x), asin(clamp(rd.y, -1.0, 1.0))) * 80.0;
           vec2 id = floor(sd);
           float h = hash12(id);
@@ -1267,6 +1294,13 @@
           }
           // Real band colours (Hubble 2019) around the Galileo entry latitude, 6.5°N; latitude = world z
           vec3 band = realProfile(radians(6.5 - w.y * 0.12)) / 0.72;
+          if (i <= 1 && uMapMix > 0.001) {
+            // The Hubble map at the entry point, ~100 km per world unit: the clouds below are the ones seen from orbit
+            float latW = uEntry.x - w.y * 0.0014;
+            float lonW = uEntry.y + w.x * 0.0014 / max(cos(uEntry.x), 0.3);
+            vec3 m = textureLod(uOpal, vec2(OPAL_U0 + lonW / TAU, 0.5 + latW / PI), 1.5).rgb / 0.72;
+            band = mix(band, m, uMapMix);
+          }
           band = mix(band, vec3(1.9) - band, uJovi);   // below ~5–10 bar the belt/zone contrast inverts (Fletcher 2021)
           c = mix(c, c * band, uBandTint * (i <= 1 ? 1.0 : 0.4));
           c *= mix(0.08, 1.0, uSunLight);
@@ -1343,11 +1377,16 @@
           vec2 f = fract(sp) - 0.5;
           vec2 o = hash22(id + fi * 31.0) - 0.5;
           float h = hash12(id + fi * 17.0);
-          float d = length(f - o * 0.7);
+          // A small mirror shard turning slowly; it flashes only when it faces the light
+          float spin = uTime * (0.15 + 0.35 * h) + h * 40.0;
+          vec2 q = rot2(spin * 0.6) * (f - o * 0.7);
+          float size = 0.02 + 0.04 * dpt;
+          float shard = 1.0 - smoothstep(size * 0.75, size, abs(q.x) * 1.7 + abs(q.y));
+          float glint = pow(abs(cos(spin)), 36.0);
           float fade = smoothstep(0.0, 0.3, dpt) * (1.0 - smoothstep(0.75, 1.0, dpt));
-          acc += (1.0 - smoothstep(0.01, 0.035 + 0.05 * dpt, d)) * fade * step(0.8, h);
+          acc += shard * fade * step(0.8, h) * (0.1 + 1.7 * glint);
         }
-        return acc * uMoteTint * uMotes * (0.6 + uHigh * 1.2);
+        return acc * uMoteTint * uMotes * (0.6 + uHigh * 0.8);
       }
 
       // Falling streaks: ammonia-water mushballs above, liquid iron below
@@ -1376,7 +1415,7 @@
         vec3 fwd = vec3(-cos(yaw) * cos(pitch), sin(pitch), -sin(yaw) * cos(pitch));
         vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
         vec3 up = cross(right, fwd);
-        vec3 rd = normalize(fwd * 1.3 + right * p.x + up * p.y);
+        vec3 rd = normalize(fwd * uFocal + right * p.x + up * p.y);
         vec3 ro = uCam;
         vec3 bg = background(ro, rd);
 
@@ -1520,42 +1559,6 @@
         return c * (1.0 - smoothstep(0.96, 1.06, r / R));
       }
 
-      // A tangle of glowing cyan threads: tumbling rings of particles seen in projection
-      vec3 strands(vec2 p) {
-        float R = uStrands.y;
-        if (uStrands.x <= 0.001 || length(p) > R * 1.8) return vec3(0.0);
-        float t = uBardoT;
-        float px = 1.0 / uRes.y;
-        vec3 acc = vec3(0.0);
-        for (int k = 0; k < 9; k++) {
-          float fk = float(k);
-          float a1 = t * (0.11 + 0.05 * fk) + fk * 1.7;
-          float a2 = t * (0.07 + 0.03 * fk) + fk * 2.9;
-          vec3 u = vec3(cos(a1), sin(a1) * cos(a2), sin(a1) * sin(a2));
-          vec3 w = normalize(vec3(-sin(a1 + 0.7 * fk), cos(a1 + 0.7 * fk) * cos(a2 + 1.3), sin(a2 + 1.3)));
-          vec3 v = normalize(cross(u, w));
-          float rad = R * (0.5 + 0.45 * hash12(vec2(fk, 1.3)));
-          vec2 A = u.xy * rad;
-          vec2 B = v.xy * rad;
-          float det = A.x * B.y - A.y * B.x;
-          float minDet = rad * rad * 0.08;
-          if (abs(det) < minDet) det = det < 0.0 ? -minDet : minDet;
-          vec2 ab = vec2(B.y * p.x - B.x * p.y, -A.y * p.x + A.x * p.y) / det;
-          float phi = atan(ab.y, ab.x);
-          float wob = 1.0 + 0.12 * sin(3.0 * phi + fk + t * 0.5) + 0.08 * sin(5.0 * phi - t * 0.3 + fk * 2.0)
-            + uLoud * 0.07 * sin(9.0 * phi + t * 2.0);
-          float d = abs(length(ab) - wob) * min(length(A), length(B));
-          // Particles strung along each ring, twinkling
-          float seg = floor((phi + PI) / TAU * 160.0);
-          float on = step(0.42, hash12(vec2(seg, fk * 7.0 + floor(t * 3.0 + fk))));
-          float z = cos(phi) * u.z + sin(phi) * v.z;
-          float line = exp(-d * d / (px * px * (1.2 + 1.8 * on))) * (0.3 + 0.7 * on) * (0.8 + uHigh * 0.6);
-          acc += mix(vec3(0.02, 0.32, 0.4), vec3(0.32, 0.95, 1.0), smoothstep(-0.6, 0.6, z)) * line;
-        }
-        acc += vec3(0.05, 0.35, 0.4) * exp(-dot(p, p) / (R * R * 0.25)) * 0.12;
-        return acc * uStrands.x;
-      }
-
       void main() {
         vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
         vec3 col = vec3(0.0);
@@ -1566,7 +1569,6 @@
         col *= mix(0.55, 1.0, v);
         col *= 1.0 - uBardoDark;
         if (uBardo.x > 0.001) col += bardo(p) * uBardo.x;
-        if (uStrands.x > 0.001) col += strands(p);
         col += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 100.0) - 0.5) * uGrain;
         col *= uFade;
         gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
@@ -1582,14 +1584,135 @@
     })
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material))
 
+    // ------------------------------------------------------------
+    // SECOND PASS — the dose (psilocybin, driven by the high band), trails, and an optional PS1 look
+    // Form constants as plane waves in cortical log-polar coordinates (Bressloff et al. 2001)
+    // ------------------------------------------------------------
+
+    const rtOptions = { depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter }
+    let sceneRT = new THREE.WebGLRenderTarget(16, 16, rtOptions)
+    let histA = new THREE.WebGLRenderTarget(16, 16, rtOptions)
+    let histB = new THREE.WebGLRenderTarget(16, 16, rtOptions)
+
+    const compUniforms = {
+      uScene: { value: null },
+      uHist: { value: null },
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uSceneRes: { value: new THREE.Vector2(1, 1) },
+      uTime: { value: 0 },
+      uDose: { value: 0 },
+      uPS1: { value: 0 }
+    }
+    const compScene = new THREE.Scene()
+    compScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: compUniforms,
+      vertexShader: `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uScene;
+        uniform sampler2D uHist;
+        uniform vec2 uRes;
+        uniform vec2 uSceneRes;
+        uniform float uTime;
+        uniform float uDose;
+        uniform float uPS1;
+        const float PI = 3.14159265;
+
+        vec3 hueRotate(vec3 c, float a) {
+          const vec3 k = vec3(0.57735);
+          float ca = cos(a);
+          return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
+        }
+        float bayer4(vec2 p) {
+          vec2 q = mod(p, 4.0);
+          int i = int(q.x) + int(q.y) * 4;
+          float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+          return (m[i] + 0.5) / 16.0;
+        }
+
+        void main() {
+          vec2 uv = gl_FragCoord.xy / uRes;
+          vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+          float d = uDose;
+          float t = uTime;
+          float r = length(p) + 1e-4;
+          float th = atan(p.y, p.x);
+          // Stripes in V1 seen through the retino-cortical map: rings (tunnels), rays, spirals, lattices
+          float rings = cos(9.0 * log(r) - t * 0.25);
+          float rays = cos(8.0 * th);
+          float spiral = cos(6.0 * th + 9.0 * log(r) - t * 0.2);
+          float form = mix(mix(spiral, rings * rays, 0.5 + 0.5 * sin(t * 0.031)), rings, 0.25 + 0.25 * sin(t * 0.023 + 2.0));
+          // Surfaces breathe and drift
+          vec2 warp = vec2(sin(p.y * 7.0 + t * 0.21), cos(p.x * 6.0 - t * 0.17)) * 0.006
+            + p * sin(t * 0.13) * 0.012 + (p / r) * form * 0.004;
+          vec2 uvw = uv + warp * d * vec2(uRes.y / uRes.x, 1.0);
+          vec2 suv = uPS1 > 0.5 ? (floor(uvw * uSceneRes) + 0.5) / uSceneRes : uvw;
+          vec3 col = texture2D(uScene, suv).rgb;
+          float l = dot(col, vec3(0.299, 0.587, 0.114));
+          col = mix(vec3(l), col, 1.0 + 0.8 * d);
+          col = max(hueRotate(col, d * (0.5 * sin(t * 0.04 + r * 2.0) + 0.2 * form)), 0.0);
+          col += col * smoothstep(0.55, 1.0, form) * 0.5 * d * d;
+          // Trails: the previous frame lingers, drawn slightly inward
+          vec3 hist = texture2D(uHist, 0.5 + (uv - 0.5) * (1.0 - 0.004 * d)).rgb;
+          col = max(col, hist * 0.94 * smoothstep(0.05, 0.4, d));
+          if (uPS1 > 0.5) {
+            // 15-bit colour with ordered dithering on the low-resolution pixel grid
+            col = floor(col * 31.0 + bayer4(floor(uvw * uSceneRes)) ) / 31.0;
+          }
+          gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+        }
+      `,
+      depthTest: false,
+      depthWrite: false
+    })))
+
+    const blitUniforms = { uTex: { value: null } }
+    const blitScene = new THREE.Scene()
+    blitScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: blitUniforms,
+      vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader: `uniform sampler2D uTex; varying vec2 vUv; void main() { gl_FragColor = texture2D(uTex, vUv); }`,
+      depthTest: false,
+      depthWrite: false
+    })))
+
     const bufferSize = new THREE.Vector2()
     function syncSize() {
       renderer.setSize(window.innerWidth, window.innerHeight)
       renderer.getDrawingBufferSize(bufferSize)
-      uniforms.uRes.value.copy(bufferSize)
+      const sh = ps1 ? 240 : Math.max(48, Math.round(bufferSize.y * quality))
+      const sw = Math.max(64, Math.round((sh * bufferSize.x) / bufferSize.y))
+      sceneRT.setSize(sw, sh)
+      histA.setSize(bufferSize.x, bufferSize.y)
+      histB.setSize(bufferSize.x, bufferSize.y)
+      uniforms.uRes.value.set(sw, sh)
+      compUniforms.uSceneRes.value.set(sw, sh)
+      compUniforms.uRes.value.copy(bufferSize)
+    }
+    function setPS1(on) {
+      ps1 = on
+      compUniforms.uPS1.value = on ? 1 : 0
+      sceneRT.dispose()
+      const f = on ? THREE.NearestFilter : THREE.LinearFilter
+      sceneRT = new THREE.WebGLRenderTarget(16, 16, { depthBuffer: false, magFilter: f, minFilter: f })
+      syncSize()
     }
     syncSize()
     window.addEventListener("resize", syncSize)
+
+    function draw() {
+      renderer.setRenderTarget(sceneRT)
+      renderer.render(scene, camera)
+      compUniforms.uScene.value = sceneRT.texture
+      compUniforms.uHist.value = histA.texture
+      renderer.setRenderTarget(histB)
+      renderer.render(compScene, camera)
+      blitUniforms.uTex.value = histB.texture
+      renderer.setRenderTarget(null)
+      renderer.render(blitScene, camera)
+      const swap = histA
+      histA = histB
+      histB = swap
+    }
 
     // ------------------------------------------------------------
     // PLANET CAMERA — from the eyepiece in 1880 to Juno's perijove
@@ -1620,29 +1743,39 @@
       return f.r.clone().multiplyScalar(-down).add(along(f)).normalize()
     }
 
-    function key(u, lat, lon, d, fwd, up, fov) {
-      return { u, v: [lat, lon, Math.log(d - 1), fov, fwd.x, fwd.y, fwd.z, up.x, up.y, up.z] }
+    // The approach runs along one great circle (the plane x = 0) parameterised by μ: μ = latitude on the
+    // near side, 180° − latitude past the pole. Juno comes in over the night side, crosses the north pole
+    // into dawn, and descends on the day side — always looking ahead, never turning back.
+    const gcPos = (mu, d) => new THREE.Vector3(0, d * Math.sin(mu * DEG), d * Math.cos(mu * DEG))
+    const gcRad = (mu) => gcPos(mu, 1)
+    const gcAhead = (mu) => new THREE.Vector3(0, Math.cos(mu * DEG), -Math.sin(mu * DEG))
+    const WEST_FAR = new THREE.Vector3(1, 0, 0)
+    const mixv = (...terms) => terms.reduce((acc, [v, k]) => acc.addScaledVector(v, k), new THREE.Vector3()).normalize()
+    function key(u, mu, d, fwd, up, fov) {
+      return { u, v: [mu, Math.log(d - 1), fov, fwd.x, fwd.y, fwd.z, up.x, up.y, up.z] }
     }
+    const towardFrom = (mu, d, target) => target.clone().sub(gcPos(mu, d)).normalize()
     const PLANET_KEYS = [
       // The eyepiece: south up, equator tilted as in the plate
-      key(0, 0, 0, 18.44, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
-      key(0.075, 0, 0, 16.04, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
-      key(0.1, 0, 0, 9.0, new THREE.Vector3(0, 0, -1), screenUp(8.9), 12),
-      // Leaving the telescope: the image turns north-up
-      key(0.112, 6, 0, 7.0, toward(6, 0, 7.0, new THREE.Vector3(0, 0.1, 0)), screenUp(94), 15),
-      key(0.125, 22, 0, 5.0, toward(22, 0, 5.0, new THREE.Vector3(0, 0.25, 0)), new THREE.Vector3(0, 1, 0), 20),
-      // Juno arrives over the north pole
-      key(0.138, 55, 0, 2.9, toward(55, 0, 2.9, new THREE.Vector3(0, 0.85, 0.1)), localFrame(55, 0).n, 32),
-      key(0.148, 80, 0, 1.95, toward(80, 0, 1.95, new THREE.Vector3(0, OBL, 0)), localFrame(80, 0).n, 42),
-      // The spacecraft turns above the cyclone crystal
-      key(0.153, 82, 0, 1.75, localFrame(82, 0).r.negate(), localFrame(82, 0).e, 44),
-      key(0.158, 80, 0, 1.6, localFrame(80, 0).r.negate(), localFrame(80, 0).n.negate(), 46),
-      // Perijove dash south over the belts, then west toward the Galileo entry site (6.5°N)
-      key(0.168, 58, 0, 1.14, ahead(58, 0, 0.55, (f) => f.n.multiplyScalar(-0.83)), localFrame(58, 0).r, 55),
-      key(0.18, 24, -1, 1.03, ahead(24, -1, 0.35, (f) => f.n.multiplyScalar(-0.94)), localFrame(24, -1).r, 60),
-      key(0.19, 9, -2, 1.008, ahead(9, -2, 0.3, (f) => f.e.multiplyScalar(-0.95)), localFrame(9, -2).r, 62),
-      key(0.2, 6.5, -4, 1.0004, ahead(6.5, -4, 0.56, (f) => f.e.multiplyScalar(-0.83)), localFrame(6.5, -4).r, 62)
+      key(0, 0, 18.44, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
+      key(0.075, 0, 16.04, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
+      key(0.1, 0, 9.0, new THREE.Vector3(0, 0, -1), screenUp(8.9), 12),
+      // Leaving the telescope: the image turns north-up while the Sun moves behind the planet
+      key(0.115, 8, 7.0, towardFrom(8, 7.0, new THREE.Vector3(0, 0.1, 0)), screenUp(94), 15),
+      key(0.132, 30, 4.6, towardFrom(30, 4.6, new THREE.Vector3(0, 0.45, 0.15)), new THREE.Vector3(0, 1, 0), 22),
+      // Night side: aurora and lightning over the north
+      key(0.148, 60, 2.5, towardFrom(60, 2.5, new THREE.Vector3(0, OBL * 0.97, 0.06)), gcAhead(60), 34),
+      // Over the pole into dawn, the cyclone crystal below
+      key(0.162, 88, 1.8, mixv([gcAhead(88), 0.45], [gcRad(88), -0.89]), mixv([gcAhead(88), 0.89], [gcRad(88), 0.45]), 42),
+      // Day side: a long glide south over the belts
+      key(0.174, 112, 1.3, mixv([gcAhead(112), 0.7], [gcRad(112), -0.71]), mixv([gcRad(112), 0.7], [gcAhead(112), 0.71]), 50),
+      key(0.185, 145, 1.06, mixv([gcAhead(145), 0.9], [gcRad(145), -0.43]), gcRad(145), 58),
+      // Turning west toward the Galileo entry latitude, 6.5°N
+      key(0.193, 166, 1.014, mixv([gcAhead(166), 0.55], [WEST_FAR, 0.75], [gcRad(166), -0.35]), gcRad(166), 62),
+      key(0.2, 173.5, 1.001, mixv([WEST_FAR, 0.83], [gcRad(173.5), -0.56]), gcRad(173.5), 62)
     ]
+    // Body longitude and latitude of the entry point, where the flight's clouds are read from the map
+    const ENTRY_LAT = 6.5 * DEG
 
     // Monotone cubic Hermite per component (harmonic-mean tangents: no overshoot between keys)
     function keyTangent(i) {
@@ -1684,15 +1817,16 @@
     const _target = new THREE.Vector3()
     const _up = new THREE.Vector3()
     function updatePlanetCamera(u) {
-      const [lat, lon, logAlt, fov, fx, fy, fz, ux, uy, uz] = planetKeyAt(u)
+      const [mu, logAlt, fov, fx, fy, fz, ux, uy, uz] = planetKeyAt(u)
       const d = 1 + Math.exp(logAlt)
-      const pos = uniforms.uPCam.value.copy(sph(lat, lon, d))
+      const pos = uniforms.uPCam.value.copy(gcPos(mu, d))
       _target.set(fx, fy, fz).normalize().add(pos)
       _m4.lookAt(pos, _target, _up.set(ux, uy, uz).normalize())
       uniforms.uPRight.value.setFromMatrixColumn(_m4, 0)
       uniforms.uPUp.value.setFromMatrixColumn(_m4, 1)
       uniforms.uPFwd.value.setFromMatrixColumn(_m4, 2).negate()
       planetCam.d = d
+      uniforms.uCamLon.value = Math.atan2(pos.x, pos.z)
       planetCam.F = 0.5 / Math.tan((fov * DEG) / 2)
       uniforms.uPF.value = planetCam.F
       // The plate is laid over the globe at exactly the size the camera sees it
@@ -1721,7 +1855,7 @@
     const moon1 = onRay(-0.648, 0.387, shadow1.z + moon1Probe.distanceTo(shadow1) / Math.tan(10 * DEG))
     // 1880: the Sun implied by moon 1 and the shadow beside it. Juno era: subsolar point ~3°N, lighting the north pole.
     const SUN_1880 = moon1.clone().sub(shadow1).normalize()
-    const SUN_JUNO = sph(3, 25, 1)
+    const SUN_JUNO = sph(3, 150, 1)
     const moon2 = onRay(-0.849, 0.238, surfaceOnRay(-0.849, 0.238).z + 0.35)
     // The black disc on the Red Spot: a dark transit of Ganymede, as 19th-century observers saw them
     const moon3 = onRay(0.094, 0.4, surfaceOnRay(0.094, 0.4).z + 0.25)
@@ -1805,7 +1939,7 @@
           st.peak = db > st.peak ? db : st.peak - dt * 2
           const x = clamp01((db - st.floor) / Math.max(20, st.peak - st.floor)) * smooth(-100, -88, db)
           const prev = st.v
-          st.v += (x - st.v) * Math.min(1, dt * 14)
+          st.v += (x - st.v) * Math.min(1, dt * 5)
           flux += Math.max(0, st.v - prev)
           aud.bands[i] = st.v
         })
@@ -1818,7 +1952,9 @@
     }
 
     // Sound as energy for the atmosphere
-    const phys = { C: 0, K: 0, Q: 0, Qth: 1, W: 0, storm: 0, aurora: 0 }
+    const phys = { C: 0, K: 0, Q: 0, Qth: 1, W: 0, storm: 0, aurora: 0, dose: 0 }
+    // ?dosis=0.8 fixes the dose for rehearsal without sound
+    const DOSE_FIXED = params.get("dosis") == null ? null : clamp01(Number(params.get("dosis")) || 0)
     const waveA = [0, 0, 0, 0, 0, 0]
     function updatePhysics(dt) {
       phys.C += (aud.low * aud.low - phys.C) * Math.min(1, dt / 12)   // convective energy (CAPE)
@@ -1827,6 +1963,10 @@
       phys.Q = Math.min(2.5, phys.Q + (0.4 * aud.high + 0.6 * phys.C + 0.02) * dt)   // charge separation
       phys.storm += (clamp01(aud.low * 0.6 + aud.mid * 0.4 - 0.1) - phys.storm) * Math.min(1, dt * 0.5)
       phys.aurora += (0.25 + 1.2 * aud.loud - phys.aurora) * Math.min(1, dt * 2)
+      // The dose: quiet highs keep ordinary vision; strong, sustained highs open the psilocybin view
+      const doseTarget = smooth(0.3, 0.8, aud.high)
+      phys.dose += (doseTarget - phys.dose) * Math.min(1, dt / (doseTarget > phys.dose ? 4 : 12))
+      if (DOSE_FIXED != null) phys.dose = DOSE_FIXED
       for (let i = 0; i < 6; i++) waveA[i] += (0.07 * aud.bands[i] - waveA[i]) * Math.min(1, dt * 1.5)
     }
 
@@ -1918,8 +2058,8 @@
         cam.pos.z += fz * speed * dt
       }
 
-      const shake = control * (0.03 + aud.low * 0.12 + phys.C * 0.08)
-      const yawJ = jitter(animT * 0.6, 1.3) * control * (0.08 + aud.low * 0.25)
+      const shake = control * (0.02 + aud.low * 0.06 + phys.C * 0.05)
+      const yawJ = jitter(animT * 0.25, 1.3) * control * (0.06 + aud.low * 0.12)
       const vortexW = track(VORTEX, u)
       cam.pos.y =
         track(ALT, u) + vortexW * (Math.sin(animT * 0.13) * 0.25 + jitter(animT, 5.1) * shake * 1.5)
@@ -1929,8 +2069,8 @@
         speed,
         control,
         yaw: cam.yaw + yawJ + look.yaw,
-        pitch: track(PITCH, u) + jitter(animT * 1.3, 2.2) * shake + look.pitch,
-        roll: -cam.yawRate * 0.9 + jitter(animT * 1.1, 3.7) * shake * 2
+        pitch: track(PITCH, u) + jitter(animT * 0.4, 2.2) * shake + look.pitch,
+        roll: -cam.yawRate * 0.9 + jitter(animT * 0.35, 3.7) * shake * 2
       }
     }
 
@@ -1944,25 +2084,25 @@
 
     function updateLightning(u, dt) {
       const w = track(LIGHTNING, u)
-      flash *= Math.exp(-dt * 6)
+      flash *= Math.exp(-dt * 2.5)
       if (restrike > 0) {
         restrike -= dt
         if (restrike <= 0) flash = Math.max(flash, 0.7 + Math.random() * 0.3)
       }
       if (fireIfCharged(w)) {
-        flash = Math.min(1, 0.55 + phys.Q * 0.3) * Math.max(0.35, w)
+        flash = Math.min(0.7, 0.35 + phys.Q * 0.2) * Math.max(0.35, w)
         const [fx, fz] = fwd2(cam.yaw)
         const aheadD = 8 + Math.random() * 22
         const side = (Math.random() - 0.5) * 24
         flashPos.set(cam.pos.x + fx * aheadD - fz * side, cam.pos.z + fz * aheadD + fx * side)
-        restrike = Math.random() < 0.5 ? 0.08 + Math.random() * 0.15 : -1
+        restrike = Math.random() < 0.25 ? 0.3 + Math.random() * 0.4 : -1
       }
     }
 
     // Night-side flashes seen from orbit, prevalent at high northern latitudes (Brown et al. 2018)
     function updatePolarFlash(u, dt) {
       pFlash *= Math.exp(-dt * 7)
-      const w = smooth(0.13, 0.14, u) * (1 - smooth(0.165, 0.175, u))
+      const w = smooth(0.13, 0.14, u) * (1 - smooth(0.158, 0.166, u))
       if (!fireIfCharged(w)) return
       for (let tries = 0; tries < 8; tries++) {
         const lat = (58 + Math.random() * 28) * DEG
@@ -1994,11 +2134,11 @@
     function setFrame(u, jdt, dt) {
       const gt = Math.max(0, (u - 0.08) * DURATION)
       const era = track(ERA, u)
-      const flightMix = smooth(0.192, 0.199, u)
+      const flightMix = smooth(0.186, 0.2, u)
 
       uniforms.uPlateMix.value = 1 - smooth(0.055, 0.08, u)
       uniforms.uFlightMix.value = flightMix
-      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.196) / 0.006, 2)) * 0.95
+      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.193) / 0.006, 2)) * 0.3
       uniforms.uEra.value = era
       uniforms.uGrain.value = 0.035 - 0.017 * era
       uniforms.uGT.value = gt
@@ -2055,12 +2195,14 @@
       waveA.forEach((a, i) => (uniforms.uWaveA.value[i] = a))
 
       // West cloud: a hot plume to the west, on the silicate deck
-      const wd = track(WEST_DIST, u)
+      const remaining = DURATION - journeyT
+      const wd = Math.min(track(WEST_DIST, u), Math.max(0, (remaining - 50) * 0.4))
       const westR = 8
       if (u > 0.83) uniforms.uWest.value.set(cam.pos.x - wd, -14.5, cam.pos.z, westR)
       else uniforms.uWest.value.set(0, 0, 0, 0)
       uniforms.uWestT.value = 2700 + 400 * phys.C
       const westInside = u > 0.83 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 14.5)) : 0
+      if (westInside > 0.5) startEnding(50)
 
       // Fog when the camera sits inside a deck
       let fogAmt = 0
@@ -2103,6 +2245,10 @@
       }
       uniforms.uTravel.value = travel % 1
       uniforms.uBandTint.value = track(BAND_TINT, u)
+      uniforms.uMapMix.value = track(MAP_MIX, u)
+      // Same lens as the orbital camera while the two views dissolve into each other
+      uniforms.uFocal.value = track([[0.2, 0.83], [0.23, 1.3]], u)
+      uniforms.uEntry.value.set(ENTRY_LAT, Math.PI - 0.12 * DURATION * ROT_RATE)
       return { ...c, P, T }
     }
 
@@ -2110,22 +2256,23 @@
     // ENDING — the bardo: darkness, then a mirror mosaic shining at the centre
     // ------------------------------------------------------------
 
-    function startEnding() {
+    function startEnding(len) {
       if (ending != null || !running) return
-      ending = { t: 0, rot: 0 }
+      ending = { t: 0, rot: 0, len }
     }
+    // Envelopes are written for 50 s; a shorter ending runs the same score faster
+    const endTime = () => (ending == null ? 0 : (ending.t * 50) / ending.len)
 
-    // 0–12 s the world goes black (death); 12–15 s nothing; then a tangle of cyan threads,
-    // the mirror mosaic opening inside it; from ~42 s everything gathers into a point and goes out.
+    // 0–12 the world goes black (death); 12–20 nothing; then the mirror mosaic opens in the centre of the dark;
+    // from ~42 it gathers into a point and goes out (times in the 50-s score).
     function updateEnding(dt) {
       if (ending == null) {
         uniforms.uBardo.value.set(0, 0, 0, 0)
-        uniforms.uStrands.value.set(0, 0)
         uniforms.uBardoDark.value = 0
         return 1
       }
       ending.t += dt * Math.min(RATES[rateIdx], 2)
-      const t = ending.t
+      const t = endTime()
       ending.rot += dt * (0.05 + 0.1 * aud.loud)
       if (aud.onset > 0.35 && ring.amp < 0.3) {
         ring.r = 0
@@ -2134,7 +2281,7 @@
       ring.r += dt * 0.4
       ring.amp *= Math.exp(-dt * 0.8)
       const gather = smooth(41, 49, t)
-      const size = FINAL_LARGE ? 0.62 : 0.06
+      const size = FINAL_LARGE ? 0.62 : 0.08
       const grow = 1 - Math.pow(1 - smooth(20, 34, t), 3)
       uniforms.uBardo.value.set(
         smooth(20, 30, t) * (1 - smooth(41, 48, t)),
@@ -2142,11 +2289,7 @@
         ending.rot,
         smooth(22, 32, t) * (1 - smooth(42, 50, t))
       )
-      uniforms.uStrands.value.set(
-        smooth(15, 22, t) * (1 - smooth(42, 49, t)),
-        (FINAL_LARGE ? 0.7 : 0.085) * (0.8 + 0.2 * smooth(15, 30, t) + 0.06 * phys.W) * (1 - 0.9 * gather)
-      )
-      uniforms.uBardoCyan.value = FINAL_LARGE ? 0.25 : 1
+      uniforms.uBardoCyan.value = FINAL_LARGE ? 0.2 : 0.55
       uniforms.uBardoT.value = t
       uniforms.uBardoDark.value = smooth(0, 12, t)
       uniforms.uBardoWave.value.set(ring.r, ring.amp)
@@ -2196,14 +2339,15 @@
         `época ${Math.round(1880 + era * 139)}${era >= 1 ? " · mapa Hubble/OPAL" : ""}`,
         `altitud ${altKm.toLocaleString("es")} km sobre las nubes`
       ]
-      if (u > 0.135 && u < 0.162) lines.push('<span class="note">Juno · polo norte: 8 ciclones alrededor de 1 (Adriani et al. 2018)</span>')
-      else if (u >= 0.162) lines.push('<span class="note">perijove · ~58 km/s · hacia la entrada de Galileo, 6,5°N (1995)</span>')
+      if (u > 0.13 && u < 0.155) lines.push('<span class="note">lado nocturno · aurora y relámpagos del norte (Brown et al. 2018)</span>')
+      else if (u >= 0.155 && u < 0.17) lines.push('<span class="note">amanecer sobre el polo · 8 ciclones alrededor de 1 (Adriani et al. 2018)</span>')
+      else if (u >= 0.17) lines.push('<span class="note">perijove · hacia la entrada de Galileo, 6,5°N (1995)</span>')
       return lines
     }
 
     let hudTimer = 0
     function updateHud(u, ch, c, dt) {
-      const fadeOut = ending == null ? 1 : 1 - smooth(0, 6, ending.t)
+      const fadeOut = ending == null ? 1 : 1 - smooth(0, 6, endTime())
       hud.style.opacity = String(fadeOut)
       hudTimer -= dt
       if (hudTimer <= 0) {
@@ -2283,7 +2427,7 @@
     document.getElementById("op-slower").addEventListener("click", () => setRate(rateIdx - 1))
     document.getElementById("op-faster").addEventListener("click", () => setRate(rateIdx + 1))
     document.getElementById("op-full").addEventListener("click", toggleFullscreen)
-    document.getElementById("op-end").addEventListener("click", startEnding)
+    document.getElementById("op-end").addEventListener("click", () => startEnding(25))
 
     window.addEventListener("keydown", (e) => {
       if (e.key === "m" || e.key === "M") opPanel.classList.toggle("open")
@@ -2300,7 +2444,7 @@
       } else if (e.key >= "1" && e.key <= "7") {
         jumpTo(CHAPTERS[Number(e.key) - 1].at * DURATION)
       } else if (e.key === "f" || e.key === "F") {
-        startEnding()
+        startEnding(25)
       } else if (e.key === "p" || e.key === "P") {
         toggleFullscreen()
       } else if (e.key === "t" || e.key === "T") {
@@ -2372,12 +2516,12 @@
       qualityTimer += dt
       if (qualityTimer < 1.5) return
       qualityTimer = 0
+      if (ps1) return
       let next = quality
-      if (frameEma > 26) next = Math.max(0.35, quality * 0.85)
-      else if (frameEma < 15) next = Math.min(MAX_QUALITY, quality * 1.08)
+      if (frameEma > 26) next = Math.max(0.3, quality * 0.85)
+      else if (frameEma < 15) next = Math.min(1, quality * 1.08)
       if (Math.abs(next - quality) > 0.01) {
         quality = next
-        renderer.setPixelRatio(quality)
         syncSize()
       }
     }
@@ -2396,7 +2540,7 @@
       const jdt = running && !paused ? dt * rate * settle : 0
       journeyT = Math.min(DURATION, journeyT + jdt)
       animT += dt * (paused ? 0.25 : rate) * (0.3 + 0.7 * settle)
-      if (running && ending == null && journeyT >= DURATION - END_SECONDS) startEnding()
+      if (running && ending == null && journeyT >= DURATION - 2) startEnding(25)
 
       if (!look.dragging) {
         look.yaw *= 1 - Math.min(1, dt * 0.8)
@@ -2412,21 +2556,30 @@
       uniforms.uLoud.value = aud.loud
       const c = setFrame(u, jdt, dt)
       uniforms.uFade.value = running
-        ? smooth(0, 0.006, u) * (ending == null ? 1 : 1 - smooth(48.5, 50, ending.t))
+        ? smooth(0, 0.006, u) * (1 - smooth(48.5, 50, endTime()))
         : 0.35
       updateHud(u, ch, c, dt)
 
-      // Resize before drawing: a resize clears the canvas, and presenting that would flash black
+      compUniforms.uTime.value = animT
+      compUniforms.uDose.value = phys.dose
       adaptQuality(frameMs, dt)
-      renderer.render(scene, camera)
+      draw()
       requestAnimationFrame(tick)
     }
     requestAnimationFrame(tick)
+
+    const optMin = document.getElementById("opt-min")
+    if ([...optMin.options].some((o) => Number(o.value) === DURATION / 60)) optMin.value = String(DURATION / 60)
 
     async function begin(withMic) {
       errEl.textContent = ""
       // Fullscreen must be requested synchronously inside the tap
       if (document.getElementById("opt-full").checked) enterFullscreen()
+      DURATION = Number(optMin.value) * 60
+      journeyT = Math.min(DURATION, parseClock(params.get("t")))
+      hud.classList.toggle("show", document.getElementById("opt-hud").checked)
+      showCaptions = document.getElementById("opt-text").checked
+      if (document.getElementById("opt-ps1").checked) setPS1(true)
       if (withMic) {
         try {
           await startMic()
