@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Júpiter — viaje a la nube oeste</title>
   <style>
     html, body {
@@ -24,6 +27,7 @@
       z-index: 10;
       text-align: center;
       padding: 1.5rem;
+      overflow-y: auto;
       background:
         radial-gradient(700px 480px at 50% 35%, #3a2a1f99, transparent 60%),
         #0b0a09ee;
@@ -44,17 +48,18 @@
     }
     p {
       color: #a99d84;
-      max-width: 30rem;
+      max-width: 32rem;
       margin: 0 auto 1.1rem;
       line-height: 1.5;
     }
-    .keys {
+    .keys, .credits {
       font-size: 0.75rem;
       color: #84796a;
-      max-width: 30rem;
+      max-width: 32rem;
       margin: 1rem auto 0;
       line-height: 1.6;
     }
+    .credits { font-size: 0.68rem; color: #6f665a; }
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -78,6 +83,16 @@
       color: #e6dcc4;
       background: transparent;
     }
+    .opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      color: #b3a68a;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .opt input { accent-color: #e5a882; width: 1rem; height: 1rem; }
     #status {
       position: fixed;
       top: 1rem;
@@ -94,6 +109,7 @@
       left: 1.1rem;
       bottom: 1rem;
       z-index: 5;
+      max-width: min(34rem, 80vw);
       font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 0.68rem;
       letter-spacing: 0.04em;
@@ -111,6 +127,7 @@
       font-size: 0.82rem;
       color: rgba(240, 228, 204, 0.8);
     }
+    #hud .note { color: rgba(229, 168, 130, 0.75); }
     #hud .bar {
       display: inline-block;
       width: 5.5rem;
@@ -142,30 +159,70 @@
       opacity: 0;
       pointer-events: none;
     }
-    /* Concert-safe mic trim — hidden by default; press M to toggle */
-    #mic-panel {
+    /* Operator panel — hidden for the show; M or triple-tap top-right */
+    #op-panel {
       position: fixed;
       right: 0.6rem;
       top: 50%;
       transform: translateY(-50%);
       z-index: 20;
-      width: 7.5rem;
-      padding: 0.55rem 0.6rem;
-      background: rgba(14, 11, 9, 0.78);
+      width: 10.5rem;
+      padding: 0.6rem 0.65rem;
+      background: rgba(14, 11, 9, 0.82);
       border: 1px solid rgba(140, 115, 90, 0.35);
       font-size: 0.65rem;
       color: #b8aa90;
       line-height: 1.35;
       display: none;
     }
-    #mic-panel.open { display: block; }
-    #mic-panel label { display: block; margin-bottom: 0.25rem; }
-    #mic-panel input[type="range"] {
-      width: 100%;
-      accent-color: #e5a882;
+    #op-panel.open { display: block; }
+    #op-panel .op-time {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      color: #e6dcc4;
+      margin-bottom: 0.5rem;
     }
-    #mic-panel .val { opacity: 0.85; margin-top: 0.15rem; }
-    #mic-panel .hint { opacity: 0.55; margin-top: 0.35rem; font-size: 0.58rem; }
+    #op-panel label { display: block; margin-bottom: 0.25rem; }
+    #op-panel input[type="range"] { width: 100%; accent-color: #e5a882; }
+    #op-panel .val { opacity: 0.85; margin-top: 0.15rem; }
+    #op-panel .meter {
+      height: 0.3rem;
+      margin-top: 0.3rem;
+      background: rgba(230, 220, 196, 0.12);
+    }
+    #op-panel .meter i { display: block; height: 100%; width: 0; background: #e5a882; }
+    #op-panel .op-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-top: 0.6rem;
+    }
+    #op-panel button {
+      font-size: 0.68rem;
+      padding: 0.5rem 0.55rem;
+      background: transparent;
+      color: #e6dcc4;
+      border: 1px solid #4a3f33;
+      justify-content: center;
+    }
+    #op-panel button.end { border-color: #e5a882; color: #f3c9a8; }
+    #op-panel .hint { opacity: 0.55; margin-top: 0.45rem; font-size: 0.58rem; }
+    #op-panel .op-speed { display: flex; gap: 0.35rem; }
+    #op-panel .op-speed button { flex: 1; }
+    /* Speed changes show briefly, then the screen is clean again */
+    #speed {
+      position: fixed;
+      right: 1rem;
+      top: 1rem;
+      z-index: 6;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.75rem;
+      color: rgba(230, 220, 196, 0.85);
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+      opacity: 0;
+      transition: opacity 0.5s;
+      pointer-events: none;
+    }
+    #speed.show { opacity: 1; }
   </style>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230b0a09' width='32' height='32'/%3E%3Ccircle cx='16' cy='16' r='10' fill='%23d6cbb0'/%3E%3Cellipse cx='19' cy='12' rx='4' ry='2' fill='%23e5a882'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -189,31 +246,49 @@
         The planet Jupiter. Observed November 1, 1880, at 9h. 30m. P.M. — E. L. Trouvelot
       </div>
       <p>
-        Un descenso de 40 minutos desde la lámina IX de Trouvelot, a través de la bruma,
+        Un descenso de 40 minutos que empieza en la lámina de Trouvelot (1880) y se vuelve real:
+        el mapa del Hubble, la órbita de Juno sobre los ciclones polares, la entrada de la sonda Galileo,
         las nubes de amoníaco y de hidrosulfuro de amonio, el viento de la Gran Mancha Roja
-        y la capa profunda. El sonido mueve el viento, la densidad de las nubes y los relámpagos.
+        y la capa profunda, donde las nubes son de roca y de hierro incandescentes.
+        El sonido es energía para la atmósfera: convección, turbulencia, carga eléctrica y ondas.
       </p>
       <div class="actions">
         <button id="start" type="button">Iniciar con micrófono</button>
         <button id="start-quiet" type="button">Iniciar sin micrófono</button>
         <a class="btn" href="index.html">Inicio</a>
       </div>
+      <label class="opt"><input id="opt-full" type="checkbox" checked /> Pantalla completa</label>
       <p id="err" style="color:#ff9a8a;font-size:0.85rem;min-height:1.2em;margin-top:0.8rem;"></p>
       <div class="keys">
-        Espacio pausa · ← → ±30 s (Shift ±5 min) · 1–7 capítulos · T texto · H instrumentos ·
-        M micrófono (o 3 toques arriba a la derecha) · F pantalla completa · S velocidad de ensayo.
-        URL: <code>?min=40</code> duración · <code>?t=25:00</code> empezar en.
+        → más rápido (hasta ×16: todo en 2:30) · ← más lento · Shift + ← → ±30 s ·
+        F finalizar (fundido a negro y mosaico, 50 s) · P pantalla completa · Espacio pausa ·
+        1–7 capítulos · T texto · H instrumentos · M operador (o 3 toques arriba a la derecha) · Shift+R reiniciar.
+        URL: <code>?min=40</code> duración · <code>?t=25:00</code> empezar en · <code>?final=grande</code> mosaico grande.
+      </div>
+      <div class="credits">
+        Lámina IX: E. L. Trouvelot, 1881. Mapa global 2019: NASA, ESA, A. Simon (GSFC), M. H. Wong (UC Berkeley), OPAL.
       </div>
     </div>
   </div>
   <div id="hud" class="show"></div>
+  <div id="speed"></div>
   <div id="caption"></div>
 
-  <aside id="mic-panel" aria-label="Sensibilidad del micrófono">
+  <aside id="op-panel" aria-label="Operador">
+    <div class="op-time"><span id="op-clock">00:00 / 40:00</span><br /><span id="op-chapter"></span></div>
     <label for="mic-gain">Sensibilidad</label>
-    <input id="mic-gain" type="range" min="0.5" max="12" step="0.1" value="3" />
-    <div class="val">ganancia <span id="mic-gain-val">3.0</span>×</div>
-    <div class="hint">M o 3 toques arriba a la derecha · iPad suele necesitar más</div>
+    <input id="mic-gain" type="range" min="0.5" max="12" step="0.1" value="12" />
+    <div class="val">ganancia <span id="mic-gain-val">12.0</span>×</div>
+    <div class="meter"><i id="op-meter"></i></div>
+    <div class="op-buttons">
+      <div class="op-speed">
+        <button id="op-slower" type="button">◀◀</button>
+        <button id="op-faster" type="button">▶▶</button>
+      </div>
+      <button id="op-full" type="button">Pantalla completa</button>
+      <button id="op-end" class="end" type="button">Finalizar</button>
+    </div>
+    <div class="hint">M o 3 toques arriba a la derecha</div>
   </aside>
 
   <script type="module">
@@ -224,6 +299,10 @@
     const hud = document.getElementById("hud")
     const captionEl = document.getElementById("caption")
     const errEl = document.getElementById("err")
+    const opPanel = document.getElementById("op-panel")
+    const opClock = document.getElementById("op-clock")
+    const opChapter = document.getElementById("op-chapter")
+    const opMeter = document.getElementById("op-meter")
 
     // ------------------------------------------------------------
     // TIMELINE — chapters as fractions of the whole journey
@@ -232,6 +311,9 @@
     const params = new URLSearchParams(location.search)
     const minutes = Number(params.get("min") ?? 40)
     const DURATION = (Number.isFinite(minutes) && minutes > 0 ? minutes : 40) * 60
+    const END_SECONDS = 50
+    // ?final=grande: the large mirror dome instead of a small jewel in the dark
+    const FINAL_LARGE = params.get("final") === "grande"
 
     function parseClock(s) {
       if (s == null) return 0
@@ -303,54 +385,121 @@
       return s * s * (3 - 2 * s)
     }
 
-    // Camera altitude (world units). Cloud decks: haze 4, NH3 2, NH4SH 0, H2O −2, deep −4.
+    const clamp01 = (x) => Math.min(1, Math.max(0, x))
+
+    // Flight altitude in world units, P = 2·e^(−0.55·alt) bar. Decks: haze 4, NH₃ 2, NH₄SH 0, H₂O −2,
+    // Na₂S −12.15 (~1.6 kbar), silicates −16.8 (~21 kbar), iron −19.5 (~90 kbar).
     const ALT = [
-      [0.19, 7.0], [0.24, 5.4], [0.3, 4.5], [0.33, 3.4], [0.37, 2.6], [0.4, 2.35],
+      [0.198, 6.5], [0.24, 5.4], [0.3, 4.5], [0.33, 3.4], [0.37, 2.6], [0.4, 2.35],
       [0.43, 1.6], [0.47, 1.25], [0.52, 0.6], [0.55, 0.35], [0.58, -0.4], [0.62, -0.75],
-      [0.65, -0.9], [0.82, -1.0], [0.85, -1.6], [0.88, -2.5], [0.93, -3.0], [1, -3.0]
+      [0.65, -0.9], [0.7, -1.3], [0.76, -1.7], [0.79, -2.6], [0.81, -5.5], [0.825, -8],
+      [0.84, -9], [0.87, -11.3], [0.885, -12.6], [0.91, -14], [0.95, -15.8], [0.965, -17.4],
+      [0.975, -19.9], [0.981, -21.5], [1, -23]
     ]
     const PITCH = [
-      [0.19, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12],
-      [0.6, -0.06], [0.65, -0.04], [0.83, -0.04], [0.9, -0.02], [1, 0]
+      [0.198, -0.6], [0.23, -0.22], [0.33, -0.15], [0.4, -0.08], [0.47, -0.12], [0.6, -0.06],
+      [0.65, -0.05], [0.8, -0.12], [0.87, -0.2], [0.9, -0.1], [0.95, -0.04], [0.97, -0.25], [1, -0.35]
     ]
     const SPEED = [
-      [0.19, 0.9], [0.25, 0.55], [0.32, 0.6], [0.45, 0.55], [0.6, 0.7], [0.64, 2.2],
-      [0.72, 3.2], [0.8, 3.8], [0.835, 0.9], [0.9, 0.5], [0.97, 0.25], [1, 0.05]
+      [0.198, 0.9], [0.25, 0.55], [0.32, 0.6], [0.45, 0.55], [0.6, 0.7], [0.64, 2.2],
+      [0.72, 3.2], [0.8, 3.6], [0.83, 1.2], [0.9, 0.8], [0.95, 0.6], [0.97, 0.3], [1, 0.1]
     ]
     const CONTROL_LOSS = [
-      [0.6, 0.04], [0.645, 0.55], [0.7, 0.9], [0.8, 1.0], [0.835, 0.15], [0.9, 0.08], [1, 0.03]
+      [0.6, 0.04], [0.645, 0.55], [0.7, 0.9], [0.8, 1.0], [0.835, 0.25], [0.9, 0.1], [1, 0.05]
     ]
     const VORTEX = [[0.62, 0], [0.645, 1], [0.8, 1], [0.83, 0]]
     const ORBIT_RADIUS = [[0.625, 26], [0.7, 12], [0.76, 7], [0.815, 14]]
+    // Where lightning physically happens: shallow storms (Becker 2020), then water clouds and the GRS wake
     const LIGHTNING = [
-      [0.48, 0], [0.52, 0.25], [0.6, 0.25], [0.63, 0], [0.8, 0], [0.85, 1], [0.95, 1], [0.985, 0]
+      [0.48, 0], [0.52, 0.3], [0.6, 0.3], [0.63, 0.05], [0.68, 0.8], [0.74, 0.7], [0.79, 0.2], [0.82, 0]
     ]
     const MOTES = [
-      [0.19, 0], [0.3, 0.15], [0.4, 0.35], [0.5, 0.3], [0.62, 0.3], [0.65, 0.9],
-      [0.82, 1.0], [0.85, 0.35], [1, 0.2]
+      [0.198, 0], [0.3, 0.15], [0.4, 0.35], [0.5, 0.3], [0.62, 0.3], [0.65, 0.9],
+      [0.82, 1.0], [0.85, 0.4], [0.9, 0.6], [1, 0.8]
     ]
-    const BAND_TINT = [[0.19, 1], [0.33, 0.8], [0.45, 0.3], [0.6, 0.15]]
-    const WEST_DIST = [[0.8, 220], [0.9, 120], [0.96, 45], [0.985, 12], [1, 0]]
-    const PLATE_R_SCREEN = 0.3884
-    const ZOOM_PLATE_END = 1.15
-    const ZOOM_GLOBE_END = 2.4
-    const ZOOM_DIVE = 30
+    // Mushballs fall from the 1–2 bar storms and melt by tens of bars (Guillot 2020); iron rains below the silicates
+    const RAIN = [[0.5, 0], [0.55, 0.4], [0.62, 0.5], [0.7, 0.6], [0.78, 0.25], [0.82, 0], [0.955, 0], [0.97, 0.45], [0.98, 0.55]]
+    const BAND_TINT = [[0.198, 1], [0.33, 0.8], [0.45, 0.3], [0.6, 0.15], [0.7, 0.1]]
+    const WEST_DIST = [[0.83, 160], [0.9, 70], [0.94, 25], [0.952, 6], [0.96, 0]]
+    const ERA = [[0.085, 0], [0.135, 1]]
 
-    function zoomAt(u) {
-      if (u < 0.075) return 1 + (ZOOM_PLATE_END - 1) * smooth(0, 0.075, u)
-      if (u < 0.165) {
-        return ZOOM_PLATE_END * Math.pow(ZOOM_GLOBE_END / ZOOM_PLATE_END, smooth(0.075, 0.165, u))
-      }
-      return ZOOM_GLOBE_END * Math.pow(ZOOM_DIVE / ZOOM_GLOBE_END, Math.min(1, (u - 0.165) / 0.035))
+    // ------------------------------------------------------------
+    // PHYSICS OF THE DESCENT
+    // ------------------------------------------------------------
+
+    const pressureAt = (alt) => 2 * Math.exp(-0.55 * alt)
+
+    // Galileo probe adiabat to 22 bar (Seiff et al. 1998: 166.1 K at 1 bar, 428 K at 22 bar),
+    // then a softening adiabat toward ~6000 K near 1.5 Mbar (Wilson & Militzer 2010)
+    function temperatureAt(P) {
+      if (P <= 22) return Math.max(110, 166.1 * Math.pow(P, 0.306))
+      const x = Math.log10(P / 22)
+      return 428 * Math.pow(10, 0.29 * x - 0.01 * x * x)
     }
 
-    // Fog colour when the camera is inside a deck (matches layerParams in the shader)
+    // log10(P / bar) → km below the 1-bar level; Galileo to 22 bar, interior models deeper
+    const DEPTH_KM = [
+      [-1.3, -60], [-1, -50], [0, 0], [1.342, 132], [2, 255], [3, 560], [4, 1250],
+      [5, 2900], [5.7, 6500], [6, 8500], [6.3, 11000]
+    ]
+    function depthAt(P) {
+      const x = Math.log10(P)
+      if (x <= DEPTH_KM[0][0]) return DEPTH_KM[0][1]
+      for (let i = 1; i < DEPTH_KM.length; i++) {
+        const [x1, z1] = DEPTH_KM[i]
+        if (x <= x1) {
+          const [x0, z0] = DEPTH_KM[i - 1]
+          return z0 + ((z1 - z0) * (x - x0)) / (x1 - x0)
+        }
+      }
+      return DEPTH_KM[DEPTH_KM.length - 1][1]
+    }
+
+    // Galileo Doppler wind (Atkinson et al. 1997): 80–100 m/s at the cloud tops, ~170 m/s from 4 to 21 bar;
+    // jets fade near ~3000 km (Kaspi et al. 2018)
+    function windAt(P, depth) {
+      let u = P < 1 ? 90 : P < 4 ? 90 + (80 * Math.log(P)) / Math.log(4) : 170
+      if (depth > 2500) u *= Math.exp(-(depth - 2500) / 700)
+      return u
+    }
+
+    const daylightAt = (P) => 1 / (1 + (P / 4) ** 2)
+
+    // Blackbody colour (fit to CIE) and Stevens' power law on Planck radiance at 550 nm
+    function blackbody(T) {
+      const t = T / 100
+      const r = t <= 66 ? 1 : clamp01(1.292936 * Math.pow(t - 60, -0.1332047592))
+      let g = t <= 66
+        ? clamp01(0.39008157876 * Math.log(t) - 0.63184144378)
+        : clamp01(1.129890861 * Math.pow(t - 60, -0.0755148492))
+      const b = t >= 66 ? 1 : t <= 19 ? 0 : clamp01(0.54320678911 * Math.log(t - 10) - 1.19625408914)
+      g *= 0.6 + 0.4 * smooth(700, 1100, T)
+      return [r, g, b]
+    }
+    function emitRGB(T) {
+      const L = 0.5 * Math.pow(10, (8.115 - 11361 / Math.max(T, 300)) / 6)
+      return blackbody(T).map((c) => (c * 1.5 * L) / (1 + L))
+    }
+
+    // Decks as the shader draws them; T marks the incandescent deep clouds (Visscher, Lodders & Fegley 2010)
     const LAYERS = [
       { h: 4.0, op: 0.55, fog: [0.82, 0.78, 0.7] },
       { h: 2.0, op: 1.0, fog: [0.9, 0.88, 0.81] },
       { h: 0.0, op: 1.0, fog: [0.64, 0.45, 0.32] },
       { h: -2.0, op: 1.0, fog: [0.3, 0.36, 0.45] },
-      { h: -4.0, op: 1.0, fog: [0.55, 0.57, 0.62] }
+      { h: -12.15, op: 0.9, T: 1390 },
+      { h: -16.8, op: 1.0, T: 2550 },
+      { h: -19.5, op: 1.0, T: 3550 }
+    ]
+
+    // Zonal winds (m/s, planetographic latitude), after Porco et al. 2003 and Tollefson et al. 2017
+    const ZONAL_WIND = [
+      [90, 0], [80, 0], [70, 8], [66, 15], [63, -8], [60, 12], [57, 22], [55, -10], [50, 20], [48, -8],
+      [43, 20], [39, -15], [35.5, 35], [31, -25], [27, 0], [23.7, 150], [21.5, 30], [19.5, -15],
+      [17, -22], [14, 10], [11, 60], [8, 115], [5, 95], [1, 75], [-1, 78], [-4, 100], [-6.5, 135],
+      [-9, 100], [-12, 40], [-15, -20], [-17.5, -58], [-20, -25], [-22.5, 5], [-26.5, 48], [-29, -25],
+      [-32.5, 28], [-36, -18], [-39.5, 30], [-43, -18], [-46.5, 8], [-50, 38], [-53, 0], [-56, -12],
+      [-60, 18], [-64, 8], [-68, 15], [-72, 0], [-90, 0]
     ]
 
     // ------------------------------------------------------------
@@ -370,53 +519,107 @@
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
 
-    // Latitude colour profile sampled from Trouvelot's plate (96 bins of sin(lat), south-up as in the plate)
-    const PROFILE_HEX =
-      "9b967d948f77908c72938f759994799f997da79e81b1a689a89d819b9075a3987cc4b69ad1c2a6d5c5a9ccbda2a3967ba5987dc9bb9ed5c5a9d9c8add6c7abbeb1959d9277b4ab8fdacfb3e4d9bde3d8bbd9cfb2b0a98d8280687d7b6484826abab398d7cdb0dfd4b8e4d8bce1d7bac3bb9f564f42564e42676050746d5a77715d9c967da99f84a79e83aba58ab7b195bdb79ac3bca0cec6aad4ccb0d7ceb2d5ccafc2b99da3977d857d67837d68d4cbaedcd1b5e2cdb0e2cdb0e2ceb1e2ceb1e2ceb1e2ceb1e1cfb2e1cfb2e1cfb2e1cfb2e1d0b3e1d0b3ded3b7d8cdb1cfc4a8bab194a8a184b3ab8ecdc4a7ccc2a6c0b79bada68a9c967a928e738d896f969176a09a7da39d80a19b7e9b9578948f738c886d8682698380678783698c886f"
-    const profileN = PROFILE_HEX.length / 6
-    const profileData = new Uint8Array(profileN * 4)
-    for (let i = 0; i < profileN; i++) {
-      for (let c = 0; c < 3; c++) {
-        profileData[i * 4 + c] = parseInt(PROFILE_HEX.slice(i * 6 + c * 2, i * 6 + c * 2 + 2), 16)
-      }
-      profileData[i * 4 + 3] = 255
+    function dataTexture(bytes, width) {
+      const tex = new THREE.DataTexture(bytes, width, 1)
+      tex.magFilter = THREE.LinearFilter
+      tex.minFilter = THREE.LinearFilter
+      tex.needsUpdate = true
+      return tex
     }
-    const profileTex = new THREE.DataTexture(profileData, profileN, 1)
-    profileTex.magFilter = THREE.LinearFilter
-    profileTex.minFilter = THREE.LinearFilter
-    profileTex.needsUpdate = true
-
-    const plateTex = new THREE.TextureLoader().load(
-      "jupiter-trouvelot-1880.jpg",
-      () => {
-        statusEl.textContent = ""
-      },
-      undefined,
-      () => {
-        statusEl.textContent = "Falta jupiter-trouvelot-1880.jpg"
+    function hexTexture(hex) {
+      const n = hex.length / 6
+      const data = new Uint8Array(n * 4)
+      for (let i = 0; i < n; i++) {
+        for (let c = 0; c < 3; c++) data[i * 4 + c] = parseInt(hex.slice(i * 6 + c * 2, i * 6 + c * 2 + 2), 16)
+        data[i * 4 + 3] = 255
       }
+      return dataTexture(data, n)
+    }
+
+    // Latitude colour profile sampled from Trouvelot's plate (96 bins of sin(lat), south-up as in the plate)
+    const profileTex = hexTexture(
+      "9b967d948f77908c72938f759994799f997da79e81b1a689a89d819b9075a3987cc4b69ad1c2a6d5c5a9ccbda2a3967ba5987dc9bb9ed5c5a9d9c8add6c7abbeb1959d9277b4ab8fdacfb3e4d9bde3d8bbd9cfb2b0a98d8280687d7b6484826abab398d7cdb0dfd4b8e4d8bce1d7bac3bb9f564f42564e42676050746d5a77715d9c967da99f84a79e83aba58ab7b195bdb79ac3bca0cec6aad4ccb0d7ceb2d5ccafc2b99da3977d857d67837d68d4cbaedcd1b5e2cdb0e2cdb0e2ceb1e2ceb1e2ceb1e2ceb1e1cfb2e1cfb2e1cfb2e1cfb2e1d0b3e1d0b3ded3b7d8cdb1cfc4a8bab194a8a184b3ab8ecdc4a7ccc2a6c0b79bada68a9c967a928e738d896f969176a09a7da39d80a19b7e9b9578948f738c886d8682698380678783698c886f"
     )
+    // Real latitude profile: per-latitude median of the 2019 Hubble OPAL map, 1° bins from 90°N to 90°S
+    const realProfileTex = hexTexture(
+      "f6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf6cb8bf5cb8cecc58ae0bd88d3b785cab183c4ac81bfa880b9a680b7a47fb4a17db09f7bab9a76a8956fa8936ba79068a58f66a38e65a28d64a08c639f8c63a18d63a18d64a28d649f8c639f8c63a18e64a48f65a89166a89368a8946aab966dae986faf9a70b59f76bba579c0a77cc1a97fc4ac82c4af85c3ae84c1ac83bda780baa47ec1ab83c4ad86c8b58fcbbe9ecfc8adccbfa3c9b694c7b18ec3ad89c5ad85c6b28dccba97d2c0a1cec8b4cbd0c8d3dddbd5dad3d1cbb9cdbc9ec3a583a4796198675294604b935c4591583f92573d915c41906145966e4ea47f59a98a5fb09466ba9b68c09c66c49a5fc39759c29455c59555c69658c39a62c19f6cc7ab7bcbbc90cdc296c4b384af9668b49366bea378c3a67ec09f7bb99470b7936dbe9670b38f6fa27c659876649b806dbca689d3c9aee5eee7e5efefd3d2c7bfa88fc6b295d4d1bbd8ddcedce2d5dee5d9dde3d5dbdfccd9d9c2cecbb3c3bba2b6ab93bbb19abbaf9abfb299c1b297c1b194bfb093baab8fbaab8ebeb094bdb19abfb59ec3b89fc4ba9fc8bfa4c6bda2bdb193b1a17ead9e7aab9c78ab9c78aa9a74aa9971aa986fab986faa966ea3916c9d8f6b9a8d6b998e6c998e6e9c9371a09876a49b79a99e7baea17eb1a480b3a681b5a883baac87bfaf8ac4b28ccbb88ed1bd90d2be91d2be91d2be91d2be91d2be91d2be91d2be91d2be91d2be91d2be91"
+    )
+
+    // Zonal wind texture: 180 bins (90°N → 90°S), byte = (u + 100) / 300
+    const windTex = (() => {
+      const data = new Uint8Array(180 * 4)
+      for (let i = 0; i < 180; i++) {
+        const lat = 89.5 - i
+        let u = 0
+        for (let k = 1; k < ZONAL_WIND.length; k++) {
+          const [l1, u1] = ZONAL_WIND[k]
+          if (lat >= l1) {
+            const [l0, u0] = ZONAL_WIND[k - 1]
+            const s = (lat - l1) / (l0 - l1)
+            u = u1 + (u0 - u1) * s * s * (3 - 2 * s)
+            break
+          }
+        }
+        data[i * 4] = Math.round(clamp01((u + 100) / 300) * 255)
+        data[i * 4 + 3] = 255
+      }
+      return dataTexture(data, 180)
+    })()
+
+    let pending = 2
+    function loaded() {
+      pending -= 1
+      if (pending <= 0) statusEl.textContent = ""
+    }
+    const loader = new THREE.TextureLoader()
+    const plateTex = loader.load("jupiter-trouvelot-1880.jpg", loaded, undefined, () => {
+      statusEl.textContent = "Falta jupiter-trouvelot-1880.jpg"
+    })
     plateTex.minFilter = THREE.LinearMipmapLinearFilter
-    plateTex.magFilter = THREE.LinearFilter
+    const opalTex = loader.load("jupiter-hubble-opal-2019.jpg", loaded, undefined, () => {
+      statusEl.textContent = "Falta jupiter-hubble-opal-2019.jpg"
+    })
+    opalTex.wrapS = THREE.RepeatWrapping
+    opalTex.minFilter = THREE.LinearMipmapLinearFilter
+    opalTex.anisotropy = renderer.capabilities.getMaxAnisotropy()
 
     const uniforms = {
       uRes: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
-      uPlate: { value: plateTex },
-      uProfile: { value: profileTex },
-      uPlateMix: { value: 1 },
-      uFlightMix: { value: 0 },
       uFade: { value: 0 },
       uWhite: { value: 0 },
+      uGrain: { value: 0.035 },
+      uFlightMix: { value: 0 },
+      uBass: { value: 0 },
+      uMid: { value: 0 },
+      uHigh: { value: 0 },
+      uLoud: { value: 0 },
+      uPlate: { value: plateTex },
+      uPlateMix: { value: 1 },
       uZoom: { value: 1 },
-      uGlobeR: { value: 0.3884 },
-      uGlobeC: { value: new THREE.Vector2() },
-      uGlobeRot: { value: 0 },
-      uGT: { value: 0 },
-      uStorm: { value: 0 },
       uSeeing: { value: 0.0015 },
-      uMoon: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
-      uShadow: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
+      uOpal: { value: opalTex },
+      uProfile: { value: profileTex },
+      uRealProfile: { value: realProfileTex },
+      uWind: { value: windTex },
+      uEra: { value: 0 },
+      uPCam: { value: new THREE.Vector3(0, 0, 18) },
+      uPFwd: { value: new THREE.Vector3(0, 0, -1) },
+      uPRight: { value: new THREE.Vector3(1, 0, 0) },
+      uPUp: { value: new THREE.Vector3(0, 1, 0) },
+      uPF: { value: 7.15 },
+      uRot: { value: 0 },
+      uGT: { value: 0 },
+      uFlowT: { value: 0 },
+      uSun: { value: new THREE.Vector3(0, 0, 1) },
+      uStorm: { value: 0 },
+      uMoon: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
+      uMoonCol: { value: [0, 1, 2, 3].map(() => new THREE.Vector3(1, 1, 1)) },
+      uMoonFlat: { value: [0, 1, 2, 3].map(() => new THREE.Vector3(1, 1, 1)) },
+      uCrystal: { value: new THREE.Vector4(0, 0, 0, 2) },
+      uAurora: { value: 0 },
+      uAuroraC: { value: new THREE.Vector3(0, 1, 0) },
+      uPFlash: { value: new THREE.Vector4() },
       uCam: { value: new THREE.Vector3(0, 7, 0) },
       uCamAng: { value: new THREE.Vector3() },
       uVortex: { value: 0 },
@@ -424,36 +627,65 @@
       uFlash: { value: new THREE.Vector4() },
       uEclipse: { value: new THREE.Vector3() },
       uWest: { value: new THREE.Vector4() },
-      uWestGlow: { value: 0.4 },
-      uWestInside: { value: 0 },
+      uWestT: { value: 2700 },
       uFog: { value: new THREE.Vector4() },
       uMotes: { value: 0 },
       uMoteTint: { value: new THREE.Vector3(1, 1, 1) },
       uTravel: { value: 0 },
       uBandTint: { value: 1 },
-      uBass: { value: 0 },
-      uMid: { value: 0 },
-      uHigh: { value: 0 }
+      uSunLight: { value: 1 },
+      uLocalT: { value: 160 },
+      uConv: { value: 0 },
+      uTurb: { value: 0 },
+      uWaveA: { value: [0, 0, 0, 0, 0, 0] },
+      uRain: { value: 0 },
+      uRainTint: { value: new THREE.Vector3(0.8, 0.84, 0.9) },
+      uJovi: { value: 0 },
+      uBardo: { value: new THREE.Vector4() },
+      uBardoT: { value: 0 },
+      uBardoDark: { value: 0 },
+      uBardoWave: { value: new THREE.Vector2() },
+      uStrands: { value: new THREE.Vector2() },
+      uBardoCyan: { value: 1 }
     }
 
     const fragmentShader = /* glsl */ `
       uniform vec2 uRes;
       uniform float uTime;
-      uniform sampler2D uPlate;
-      uniform sampler2D uProfile;
-      uniform float uPlateMix;
-      uniform float uFlightMix;
       uniform float uFade;
       uniform float uWhite;
+      uniform float uGrain;
+      uniform float uFlightMix;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uHigh;
+      uniform float uLoud;
+      uniform sampler2D uPlate;
+      uniform float uPlateMix;
       uniform float uZoom;
-      uniform float uGlobeR;
-      uniform vec2 uGlobeC;
-      uniform float uGlobeRot;
-      uniform float uGT;
-      uniform float uStorm;
       uniform float uSeeing;
-      uniform vec3 uMoon[4];
-      uniform vec3 uShadow[4];
+      uniform sampler2D uOpal;
+      uniform sampler2D uProfile;
+      uniform sampler2D uRealProfile;
+      uniform sampler2D uWind;
+      uniform float uEra;
+      uniform vec3 uPCam;
+      uniform vec3 uPFwd;
+      uniform vec3 uPRight;
+      uniform vec3 uPUp;
+      uniform float uPF;
+      uniform float uRot;
+      uniform float uGT;
+      uniform float uFlowT;
+      uniform vec3 uSun;
+      uniform float uStorm;
+      uniform vec4 uMoon[4];
+      uniform vec3 uMoonCol[4];
+      uniform vec3 uMoonFlat[4];
+      uniform vec4 uCrystal;
+      uniform float uAurora;
+      uniform vec3 uAuroraC;
+      uniform vec4 uPFlash;
       uniform vec3 uCam;
       uniform vec3 uCamAng;
       uniform float uVortex;
@@ -461,16 +693,29 @@
       uniform vec4 uFlash;
       uniform vec3 uEclipse;
       uniform vec4 uWest;
-      uniform float uWestGlow;
-      uniform float uWestInside;
+      uniform float uWestT;
       uniform vec4 uFog;
       uniform float uMotes;
       uniform vec3 uMoteTint;
       uniform float uTravel;
       uniform float uBandTint;
-      uniform float uBass;
-      uniform float uMid;
-      uniform float uHigh;
+      uniform float uSunLight;
+      uniform float uLocalT;
+      uniform float uConv;
+      uniform float uTurb;
+      uniform float uWaveA[6];
+      uniform float uRain;
+      uniform vec3 uRainTint;
+      uniform float uJovi;
+      uniform vec4 uBardo;
+      uniform float uBardoT;
+      uniform float uBardoDark;
+      uniform vec2 uBardoWave;
+      uniform vec2 uStrands;
+      uniform float uBardoCyan;
+
+      const float PI = 3.14159265;
+      const float TAU = 6.28318531;
 
       // Plate IX geometry, measured from the scan: oblate disk tilted 8.9°, south up
       const vec2 PLATE_C = vec2(0.50126, 0.49714);
@@ -479,14 +724,19 @@
       const vec2 EQ = vec2(0.98796, 0.15471);
       const vec2 UPV = vec2(-0.15471, 0.98796);
       const float OBL = 0.9355;
+      const float R_KM = 71492.0;
+
+      // OPAL 2019 map aligned so its Great Red Spot sits where Trouvelot drew his
+      const float OPAL_U0 = 0.228;
+      const vec2 GRS_MAP = vec2(0.2017, 0.3761);
 
       const vec3 SKY_BG = vec3(0.055, 0.052, 0.05);
       const vec3 GRS_COL = vec3(0.898, 0.639, 0.494);
+      const vec3 GRS_2019 = vec3(0.714, 0.365, 0.055);
       const vec3 RING_COL = vec3(0.93, 0.9, 0.8);
       const vec3 CUMULUS = vec3(0.91, 0.88, 0.78);
       const vec3 BEAD = vec3(0.17, 0.16, 0.13);
       const vec3 MOON_COL = vec3(0.93, 0.92, 0.86);
-      const vec3 SHADOW_COL = vec3(0.05, 0.045, 0.04);
       const vec3 HAZE_WHITE = vec3(0.88, 0.85, 0.77);
       const vec3 VERMILION = vec3(1.0, 0.6, 0.48);
 
@@ -561,30 +811,40 @@
         }
         return sqrt(d);
       }
-      vec3 profile(float b) {
-        return texture2D(uProfile, vec2(clamp(b * 0.5 + 0.5, 0.005, 0.995), 0.5)).rgb;
-      }
       mat2 rot2(float a) {
         float c = cos(a);
         float s = sin(a);
         return mat2(c, s, -s, c);
       }
-
-      // ---------------- TELESCOPE: plate + procedural Trouvelot globe ----------------
-
-      vec3 sky(vec2 p) {
-        vec3 c = SKY_BG * (1.0 - 0.35 * dot(p, p));
-        vec2 sp = p * 90.0;
-        vec2 id = floor(sp);
-        float h = hash12(id);
-        if (h > 0.985) {
-          vec2 o = hash22(id) - 0.5;
-          float d = length(fract(sp) - 0.5 - o * 0.6);
-          float tw = 0.6 + 0.4 * sin(uTime * (1.0 + h * 3.0) + h * 40.0) + uHigh * 0.8;
-          c += vec3(0.85, 0.82, 0.75) * (1.0 - smoothstep(0.02, 0.12, d)) * (h - 0.985) * 24.0 * tw;
-        }
-        return c;
+      vec3 profile(float b) {
+        return texture2D(uProfile, vec2(clamp(b * 0.5 + 0.5, 0.005, 0.995), 0.5)).rgb;
       }
+      vec3 realProfile(float latG) {
+        return texture2D(uRealProfile, vec2(clamp(0.5 - latG / PI, 0.003, 0.997), 0.5)).rgb;
+      }
+      float zonalWind(float latG) {
+        return texture2D(uWind, vec2(clamp(0.5 - latG / PI, 0.003, 0.997), 0.5)).r * 300.0 - 100.0;
+      }
+
+      // Incandescence: blackbody colour, brightness by Stevens' power law relative to the eye's adaptation
+      vec3 blackbody(float T) {
+        float t = T / 100.0;
+        float r = t <= 66.0 ? 1.0 : clamp(1.292936 * pow(t - 60.0, -0.1332047592), 0.0, 1.0);
+        float g = t <= 66.0
+          ? clamp(0.39008157876 * log(t) - 0.63184144378, 0.0, 1.0)
+          : clamp(1.129890861 * pow(t - 60.0, -0.0755148492), 0.0, 1.0);
+        float b = t >= 66.0 ? 1.0 : (t <= 19.0 ? 0.0 : clamp(0.54320678911 * log(t - 10.0) - 1.19625408914, 0.0, 1.0));
+        g *= 0.6 + 0.4 * smoothstep(700.0, 1100.0, T);
+        return vec3(r, g, b);
+      }
+      // Hue from the blackbody, brightness from Planck at 550 nm compressed (Stevens) around 1,400 K,
+      // so hotter layers read brighter and whiter, from dull red to white
+      vec3 emit(float T) {
+        float L = 0.5 * pow(10.0, (8.115 - 11361.0 / max(T, 300.0)) / 6.0);
+        return blackbody(T) * (1.5 * L / (1.0 + L));
+      }
+
+      // ---------------- 1880: Trouvelot's planet ----------------
 
       vec3 jupiterMap(float L, float lat, float b, float cl) {
         float storm = uStorm;
@@ -612,92 +872,269 @@
         float st = exp(-pow((bb + 0.14) / 0.028, 2.0));
         col *= 1.0 - st * (0.15 + 0.25 * vnoise(vec2(Lj * 60.0, lat * 300.0)));
 
-        // Row of "jet black beads" (northern commotion of October 1880)
+        // Row of "jet black beads" (northern commotion of October 1880) — a transient, gone by the Juno era
+        float beads = 1.0 - smoothstep(0.0, 0.4, uEra);
         float k = floor((Lj + 0.425) / 0.2 + 0.5);
         float lc = -0.425 + k * 0.2;
         float sz = k == 0.0 ? 0.025 : k == 1.0 ? 0.05 : k == 2.0 ? 0.056 : k == 3.0 ? 0.046
           : k == 4.0 ? 0.028 : 0.012 + 0.04 * hash12(vec2(k, 7.0));
         float db = length(vec2((Lj - lc) * cl, lat + 0.36));
-        col *= 1.0 - 0.35 * (1.0 - smoothstep(sz, sz * 2.2, db));
-        col = mix(col, BEAD, 1.0 - smoothstep(sz * 0.55, sz, db));
+        col *= 1.0 - 0.35 * beads * (1.0 - smoothstep(sz, sz * 2.2, db));
+        col = mix(col, BEAD, beads * (1.0 - smoothstep(sz * 0.55, sz, db)));
 
         // Rosy lattice band
         float lw = worley(vec2(Lj * 14.0, lat * 34.0));
         float lb = exp(-pow((bb + 0.62) / 0.07, 2.0));
         col = mix(col, vec3(0.86, 0.75, 0.69), lb * (1.0 - smoothstep(0.2, 0.55, lw)) * 0.75);
 
-        // Great Red Spot, white luminous ring, and the two black specks seen in Nov 1880
-        vec2 g = vec2((Lj - 0.165) * cl / 0.33, (lat - 0.386) / 0.14);
+        // Great Red Spot: ~40,000 km long in 1880, ~16,000 km by 2019 (Simon et al. 2018) — it shrinks as we arrive
+        float lonHalf = mix(0.33, 0.125, uEra);
+        float latHalf = mix(0.14, 0.09, uEra);
+        vec2 g = vec2((Lj - 0.165) * cl / lonHalf, (lat - 0.386) / latHalf);
         float e = length(g);
         if (e < 2.0) {
           float ang = atan(g.y, g.x) + t * 0.03 * (1.0 - smoothstep(0.3, 1.2, e));
           float tex = fbm(vec2(cos(ang), sin(ang)) * e * 2.5 + 4.0, 3);
           float ring = smoothstep(0.82, 1.0, e) * (1.0 - smoothstep(1.15, 1.7, e));
-          col = mix(col, RING_COL, ring * 0.9);
-          col = mix(col, GRS_COL * (0.94 + 0.12 * tex), 1.0 - smoothstep(0.93, 1.0, e));
+          col = mix(col, RING_COL, ring * 0.9 * (1.0 - uEra * 0.6));
+          vec3 red = mix(GRS_COL, GRS_2019, smoothstep(0.0, 0.7, uEra));
+          col = mix(col, red * (0.94 + 0.12 * tex), 1.0 - smoothstep(0.93, 1.0, e));
           float s1 = length((g - vec2(-0.685, 0.014)) * vec2(0.33, 0.14));
           float s2 = length((g - vec2(0.081, 0.286)) * vec2(0.33, 0.14));
-          col = mix(col, BEAD, 1.0 - smoothstep(0.004, 0.007, min(s1, s2)));
+          col = mix(col, BEAD, beads * (1.0 - smoothstep(0.004, 0.007, min(s1, s2))));
         }
         return col;
       }
 
-      vec3 globeSurface(vec2 q, float r) {
-        float z = sqrt(max(0.0, 1.0 - r * r));
-        float b = clamp(q.y, -1.0, 1.0);
-        float lat = asin(b);
-        float cl = max(cos(lat), 0.05);
-        float lon = atan(q.x, z);
-        vec3 col = jupiterMap(lon + uGlobeRot, lat, b, cl);
-        // Brightest toward the centre, darker at the limb opposite the Sun
-        col *= 0.58 + 0.42 * pow(z, 0.45);
-        col *= 1.0 - 0.18 * smoothstep(0.2, 1.0, q.x) * (1.0 - z);
+      // ---------------- 2019: Hubble OPAL map, flowing with the real jets ----------------
+
+      vec3 flowSample(float u0, float vt, float omega, float t, float inGrs, vec2 dg, float dxw, float cl, float lod) {
+        vec2 uvZ = vec2(u0 - omega * t / TAU, vt);
+        // The Red Spot turns in place, anticlockwise (≈4.5-day period, time-lapsed)
+        vec2 dr = rot2(0.0129 * t) * dg;
+        vec2 uvR = vec2(u0 - dxw + dr.x * 0.125 / (TAU * cl), GRS_MAP.y + dr.y * 0.09 / PI);
+        return textureLod(uOpal, mix(uvZ, uvR, inGrs), lod).rgb;
+      }
+
+      vec3 realMap(float latG, float lon, float lod) {
+        float vt = 0.5 + latG / PI;
+        float u0 = OPAL_U0 + lon / TAU;
+        float cl = max(cos(latG), 0.08);
+        // Time-lapse ×2000 of the zonal wind profile
+        float omega = zonalWind(latG) / (R_KM * 1000.0 * cl) * 2000.0;
+        float dxw = fract(u0 - GRS_MAP.x + 0.5) - 0.5;
+        vec2 dg = vec2(dxw * TAU * cl / 0.125, (vt - GRS_MAP.y) * PI / 0.09);
+        float inGrs = 1.0 - smoothstep(1.0, 1.6, length(dg));
+        float P = 12.0;
+        float ph = fract(uFlowT / P);
+        vec3 cA = flowSample(u0, vt, omega, ph * P, inGrs, dg, dxw, cl, lod);
+        vec3 cB = flowSample(u0, vt, omega, fract(ph + 0.5) * P, inGrs, dg, dxw, cl, lod);
+        return mix(cA, cB, abs(1.0 - 2.0 * ph));
+      }
+
+      // A cyclone: logarithmic spiral arms around a bright core
+      float cyclone(vec2 d, float R, float sense, float seed) {
+        // No two alike: diameters span ~4,000–4,600 km, arms and winding differ
+        R *= 0.93 + 0.14 * hash12(vec2(seed, 3.7));
+        float r = length(d) / R;
+        if (r > 1.5) return 0.0;
+        float th = atan(d.y, d.x) * sense;
+        float spiral = th + (2.2 + 0.8 * hash12(vec2(seed, 9.1))) * log(r + 0.05) - uGT * 0.15 + seed * 1.7;
+        float nArms = 4.0 + floor(hash12(vec2(seed, 5.3)) * 3.0);
+        float arms = 0.5 + 0.5 * sin(nArms * spiral + 2.5 * fbm(d / R * 3.0 + 7.0 + seed, 3));
+        float body = exp(-r * r * 0.9);
+        float eye = smoothstep(0.02, 0.12, r);
+        return clamp(body * (0.3 + 0.7 * arms) * (0.65 + 0.35 * eye) * (1.0 - smoothstep(1.1, 1.5, r)) * 1.2, 0.0, 1.0);
+      }
+
+      // Juno's poles: bluish-grey folded filaments and the polar cyclone crystals
+      // (north 8 around 1, ~4,000–4,600 km; south 5 around 1, ~5,600–7,000 km — Adriani et al. 2018)
+      vec3 junoPole(float latG, float lon, vec3 base) {
+        float ap = abs(latG);
+        float m = smoothstep(radians(56.0), radians(74.0), ap);
+        if (m <= 0.0) return base;
+        float north = latG > 0.0 ? 1.0 : -1.0;
+        float colat = PI * 0.5 - ap;
+        float th = lon * north;
+        vec2 q = colat * vec2(cos(th), sin(th));
+
+        vec2 w = q * 40.0;
+        float warp = fbm(w * 0.5 + uGT * 0.01, 3);
+        float fil = fbm(w + (warp - 0.5) * 3.0, 4);
+        float ridge = 1.0 - abs(2.0 * fil - 1.0);
+        // From the banded browns into the bluish-grey polar haze that JunoCam sees
+        vec3 edge = mix(base, vec3(dot(base, vec3(0.33))), 0.5);
+        vec3 grey = mix(vec3(0.34, 0.37, 0.42), vec3(0.5, 0.5, 0.51), fil);
+        vec3 c = mix(edge * (0.85 + 0.3 * fil), grey, smoothstep(radians(30.0), radians(14.0), colat));
+        c = mix(c, vec3(0.86, 0.84, 0.8), smoothstep(0.55, 1.0, ridge) * pow(ridge, 3.0) * 0.35);
+
+        float N = north > 0.0 ? 8.0 : 5.0;
+        float cycR = north > 0.0 ? 2150.0 / 69000.0 : 3150.0 / 69000.0;
+        float best = cyclone(q - vec2(radians(0.5), 0.0), cycR * (north > 0.0 ? 1.05 : 1.1), north, 0.0);
+        float ang = atan(q.y, q.x) - uCrystal.z;
+        float j = floor(ang / (TAU / N) + 0.5);
+        for (int k = -1; k <= 1; k++) {
+          float jj = j + float(k);
+          // Normal mode of the vortex crystal: sound pumps energy into it
+          float wob = uCrystal.x * sin(uCrystal.y - TAU * uCrystal.w * jj / N);
+          float aj = jj * TAU / N + uCrystal.z + wob * 0.06;
+          // Four at ~83.3°N, four at ~82.5°N (Mura et al. 2021)
+          float rj = (north > 0.0 ? radians(mod(jj, 2.0) < 0.5 ? 6.7 : 7.5) : radians(6.0)) * (1.0 + wob * 0.05);
+          best = max(best, cyclone(q - rj * vec2(cos(aj), sin(aj)), cycR, north, mod(jj, N) + 1.0));
+        }
+        c = mix(c, mix(vec3(0.5, 0.46, 0.42), vec3(0.9, 0.86, 0.79), best), smoothstep(0.02, 0.35, best));
+        return mix(base, c, m);
+      }
+
+      vec3 surfaceColor(vec3 hs, float latG, float lon, float foot) {
+        float k = smoothstep(0.25, 0.95, uEra);
+        vec3 trou = vec3(0.0);
+        if (k < 0.999) {
+          float b = clamp(-hs.y, -1.0, 1.0);
+          float latT = asin(b);
+          trou = jupiterMap(-lon, latT, b, max(cos(latT), 0.05));
+        }
+        if (k <= 0.001) return trou;
+        float lod = log2(max(foot * 326.0, 1.0));
+        vec3 real = junoPole(latG, lon, realMap(latG, lon, lod));
+        // Below the map's ~220 km pixels: zonally stretched filaments and convective cells
+        float det = smoothstep(0.0035, 0.0003, foot);
+        if (det > 0.0) {
+          float cl = max(cos(latG), 0.1);
+          vec2 q = vec2(lon * cl, latG) * 160.0;
+          float warp = fbm(q * 0.35 + uFlowT * 0.02, 3);
+          float f = fbm(vec2(q.x * 0.45, q.y * 1.6) + (warp - 0.5) * 2.5, 5);
+          float cells = 1.0 - worley(q * vec2(0.8, 2.2) + (warp - 0.5) * 3.0);
+          real *= mix(1.0, 0.84 + 0.3 * f + 0.05 * smoothstep(0.6, 0.95, cells), det);
+        }
+        return mix(trou, real, k);
+      }
+
+      vec3 space(vec3 rd) {
+        vec3 c = mix(SKY_BG, vec3(0.0, 0.0, 0.006), uEra);
+        vec2 sp = vec2(atan(rd.z, rd.x), asin(clamp(rd.y, -1.0, 1.0))) * 160.0;
+        vec2 id = floor(sp);
+        float h = hash12(id);
+        if (h > 0.988) {
+          float d = length(fract(sp) - 0.5 - (hash22(id) - 0.5) * 0.6);
+          float tw = 1.0 + (0.4 * sin(uTime * (1.0 + h * 3.0) + h * 40.0) + uHigh * 0.8) * (1.0 - uEra);
+          c += vec3(0.85, 0.82, 0.75) * (1.0 - smoothstep(0.02, 0.12, d)) * (h - 0.988) * 30.0 * tw;
+        }
+        return c;
+      }
+
+      vec3 planetView(vec3 ro, vec3 rd) {
+        vec3 col = space(rd);
+        float tP = 1e9;
+        vec3 sc = vec3(1.0, 1.0 / OBL, 1.0);
+        vec3 o = ro * sc;
+        vec3 d = rd * sc;
+        float A = dot(d, d);
+        float B = dot(o, d);
+        float C = dot(o, o) - 1.0;
+        float disc = B * B - A * C;
+        float ek = smoothstep(0.1, 0.6, uEra);
+        if (disc > 0.0 && -B - sqrt(disc) > 0.0) {
+          float t = (-B - sqrt(disc)) / A;
+          tP = t;
+          vec3 hp = ro + rd * t;
+          vec3 hs = hp * sc;
+          vec3 n = normalize(hp * vec3(1.0, 1.0 / (OBL * OBL), 1.0));
+          float latG = asin(clamp(n.y, -1.0, 1.0));
+          float lon = atan(hs.x, hs.z) - uRot;
+          float mu = max(dot(n, -rd), 0.0);
+          float foot = t / (uPF * uRes.y) / max(mu, 0.12);
+          vec3 s = surfaceColor(hs, latG, lon, foot);
+
+          float mu0 = dot(n, uSun);
+          // Trouvelot: brightest toward the centre, darker at the limb opposite the Sun
+          float shadeT = (0.58 + 0.42 * pow(mu, 0.45)) * (1.0 - 0.25 * clamp((mu - mu0) * 2.0, 0.0, 1.0) * (1.0 - mu));
+          // Juno-era: Minnaert limb darkening and a soft terminator
+          float shadeM = pow(max(mu0, 0.0) + 0.02, 0.55) * pow(mu + 0.02, -0.08) * 1.05;
+          float shade = mix(shadeT, shadeM, ek);
+          float sh = 1.0;
+          for (int i = 0; i < 4; i++) {
+            vec3 oc = uMoon[i].xyz - hp;
+            float bs = dot(oc, uSun);
+            if (bs > 0.0) {
+              float dd = length(oc - uSun * bs);
+              sh *= mix(0.06, 1.0, smoothstep(uMoon[i].w * 0.92, uMoon[i].w * 1.1, dd));
+            }
+          }
+          col = s * shade * sh;
+          if (ek > 0.0) {
+            float night = 1.0 - smoothstep(-0.06, 0.14, mu0);
+            // Main auroral oval, offset from the pole; the "solar wind" here is the room's sound
+            float da = abs(acos(clamp(dot(n, uAuroraC), -1.0, 1.0)) - 0.24);
+            vec3 ax = normalize(cross(uAuroraC, vec3(0.0, 0.0, 1.0)));
+            float curtain = fbm(vec2(atan(dot(n, cross(uAuroraC, ax)), dot(n, ax)) * 6.0, uTime * 0.4), 3);
+            vec3 emis = vec3(0.55, 0.38, 0.95) * exp(-da * da / 0.00005) * uAurora * (0.15 + 0.6 * curtain) * (0.1 + 0.9 * night);
+            // Lightning seen from orbit on the night side (Becker et al. 2020; Brown et al. 2018)
+            float fd = length(n - uPFlash.xyz);
+            emis += vec3(0.85, 0.9, 1.0) * uPFlash.w * (exp(-fd * fd / 0.00004) * 3.0 + exp(-fd * fd / 0.0009) * 0.4) * (0.2 + 0.8 * night);
+            col += emis * ek;
+            col += vec3(0.5, 0.6, 0.78) * pow(1.0 - mu, 5.0) * smoothstep(-0.1, 0.4, mu0) * 0.35 * ek;
+          }
+        } else {
+          // Thin haze above the limb
+          float hd = sqrt(max(C + 1.0 - B * B / A, 0.0)) - 1.0;
+          if (B < 0.0 && hd > 0.0) {
+            vec3 cp = (o - d * (B / A)) / sc;
+            float sunSide = smoothstep(-0.3, 0.4, dot(normalize(cp), uSun));
+            col += vec3(0.55, 0.65, 0.85) * exp(-hd / 0.004) * sunSide * 0.5 * ek;
+          }
+        }
         for (int i = 0; i < 4; i++) {
-          vec3 s = uShadow[i];
-          if (s.z <= 0.0) continue;
-          float ds = length((q - s.xy) * vec2(1.0, OBL));
-          col = mix(col, SHADOW_COL, s.z * (1.0 - smoothstep(0.042, 0.054, ds)));
+          vec4 m = uMoon[i];
+          vec3 oc = ro - m.xyz;
+          float b = dot(oc, rd);
+          float h = b * b - (dot(oc, oc) - m.w * m.w);
+          if (h > 0.0) {
+            float tm = -b - sqrt(h);
+            if (tm > 0.0 && tm < tP) {
+              vec3 nm = normalize(oc + rd * tm);
+              float rim = smoothstep(0.0, 0.08, sqrt(h) / m.w);
+              vec3 lit = uMoonCol[i] * (0.04 + 0.96 * max(dot(nm, uSun), 0.0));
+              col = mix(col, mix(uMoonFlat[i], lit, smoothstep(0.1, 0.7, uEra)), rim);
+              tP = tm;
+            }
+          }
         }
         return col;
       }
 
       vec3 telescope(vec2 p) {
-        // Atmospheric "seeing": the image trembles like at the eyepiece
+        // Atmospheric "seeing": the image trembles like at the eyepiece, until we leave Earth
         p += (vec2(vnoise(p * 7.0 + uTime * 1.3), vnoise(p * 7.0 - uTime * 1.1 + 9.0)) - 0.5) * uSeeing;
-        vec3 sk = sky(p);
-        vec2 d = p - uGlobeC;
-        vec2 q = vec2(dot(d, EQ), dot(d, UPV) / OBL) / uGlobeR;
-        float r = length(q);
-        float px = 1.5 / (uRes.y * uGlobeR);
-        float disk = 1.0 - smoothstep(1.0 - px, 1.0 + px, r);
-        vec3 col = sk;
-        if (uPlateMix < 1.0) {
-          if (r < 1.0 + px) col = mix(sk, globeSurface(q, r), disk);
-          for (int i = 0; i < 4; i++) {
-            vec3 m = uMoon[i];
-            vec2 mp = uGlobeC + (EQ * m.x + UPV * m.y * OBL) * uGlobeR;
-            float md = length(p - mp) / uGlobeR;
-            float visible = (m.z > 0.0 || length(m.xy) > 1.0) ? 1.0 : 0.0;
-            col = mix(col, MOON_COL, visible * (1.0 - smoothstep(0.038, 0.048, md)));
-          }
-        }
+        vec3 ro = uPCam;
+        vec3 rd = normalize(uPF * uPFwd + p.x * uPRight + p.y * uPUp);
+        vec3 col = uPlateMix < 1.0 ? planetView(ro, rd) : space(rd) * (1.0 - 0.35 * dot(p, p));
         if (uPlateMix > 0.0) {
-          vec2 uv = PLATE_C + vec2(d.x / PLATE_ASPECT, d.y) / uZoom;
+          vec2 q = vec2(dot(p, EQ), dot(p, UPV) / OBL) / (PLATE_R * uZoom);
+          float r = length(q);
+          vec2 uv = PLATE_C + vec2(p.x / PLATE_ASPECT, p.y) / uZoom;
           vec3 pc = texture2D(uPlate, uv).rgb;
           float pm = 1.0 - smoothstep(0.995, 1.02, r);
-          col = mix(col, mix(sk, pc, pm), uPlateMix);
+          vec3 outside = uPlateMix < 1.0 ? col : space(rd) * (1.0 - 0.35 * dot(p, p));
+          col = mix(col, mix(outside, pc, pm), uPlateMix);
         }
         return col;
       }
 
-      // ---------------- FLIGHT: descent through the cloud decks ----------------
+      // ---------------- FLIGHT: descent through the decks ----------------
 
-      void layerParams(int i, out float h, out float sc, out float cover, out float op, out vec3 lit, out vec3 dark) {
+      void layerParams(int i, out float h, out float sc, out float cover, out float op, out vec3 lit, out vec3 dark, out float Te) {
+        Te = 0.0;
+        lit = vec3(0.0);
+        dark = vec3(0.0);
         if (i == 0) { h = 4.0; sc = 0.1; cover = 0.5; op = 0.55; lit = vec3(0.86, 0.82, 0.74); dark = vec3(0.62, 0.59, 0.53); }
         else if (i == 1) { h = 2.0; sc = 0.42; cover = 0.4; op = 1.0; lit = vec3(0.97, 0.94, 0.86); dark = vec3(0.52, 0.5, 0.46); }
         else if (i == 2) { h = 0.0; sc = 0.33; cover = 0.44; op = 1.0; lit = vec3(0.86, 0.62, 0.44); dark = vec3(0.34, 0.21, 0.14); }
         else if (i == 3) { h = -2.0; sc = 0.28; cover = 0.46; op = 1.0; lit = vec3(0.58, 0.64, 0.72); dark = vec3(0.12, 0.15, 0.21); }
-        else { h = -4.0; sc = 0.22; cover = 0.4; op = 1.0; lit = vec3(0.8, 0.82, 0.86); dark = vec3(0.1, 0.1, 0.12); }
+        // Deep refractory clouds, incandescent: Na₂S, then silicates (forsterite), then liquid iron
+        else if (i == 4) { h = -12.15; sc = 0.2; cover = 0.46; op = 0.9; Te = 1390.0; }
+        else if (i == 5) { h = -16.8; sc = 0.18; cover = 0.42; op = 1.0; Te = 2550.0; }
+        else { h = -19.5; sc = 0.16; cover = 0.45; op = 1.0; Te = 3550.0; }
       }
 
       vec3 ambientAt(float y) {
@@ -723,7 +1160,7 @@
       vec3 background(vec3 ro, vec3 rd) {
         vec3 up = ambientAt(ro.y + 2.0);
         vec3 dn = ambientAt(ro.y - 2.0);
-        vec3 c = mix(dn * 0.75, up, smoothstep(-0.5, 0.5, rd.y));
+        vec3 c = mix(dn * 0.75, up, smoothstep(-0.5, 0.5, rd.y)) * uSunLight;
         float space = smoothstep(3.8, 4.6, ro.y);
         if (space > 0.0 && rd.y > -0.1) {
           vec3 sp = mix(vec3(0.7, 0.66, 0.58), vec3(0.015, 0.015, 0.028), smoothstep(-0.03, 0.12, rd.y));
@@ -735,15 +1172,23 @@
             sp += vec3(0.8) * (1.0 - smoothstep(0.03, 0.12, dd)) * (h - 0.97) * 20.0
               * smoothstep(0.05, 0.3, rd.y) * (0.6 + uHigh);
           }
-          // Galilean moons as Trouvelot drew them: plain white discs
-          sp = mix(sp, vec3(0.93, 0.9, 0.78), skyDisc(rd, vec3(-1.0, 0.16, 0.32), 0.035));
+          // Io, Europa, Ganymede and the far Sun
+          sp = mix(sp, vec3(0.93, 0.86, 0.55), skyDisc(rd, vec3(-1.0, 0.16, 0.32), 0.035));
           sp = mix(sp, MOON_COL, skyDisc(rd, vec3(-1.0, 0.1, -0.5), 0.02));
-          sp = mix(sp, vec3(0.72, 0.7, 0.66), skyDisc(rd, vec3(-0.6, 0.3, 1.0), 0.026));
-          // Distant Sun, a fifth of what Earth sees
+          sp = mix(sp, vec3(0.62, 0.58, 0.52), skyDisc(rd, vec3(-0.6, 0.3, 1.0), 0.026));
           vec3 sunDir = normalize(vec3(-0.4, 0.35, 0.85));
           float sd2 = max(dot(rd, sunDir), 0.0);
           sp += vec3(1.0, 0.96, 0.88) * (smoothstep(0.99994, 0.99997, sd2) + pow(sd2, 400.0) * 0.5);
           c = mix(c, sp, space * smoothstep(-0.1, 0.02, rd.y));
+        }
+        // The gas itself glows once it is hot enough: hotter below, cooler above.
+        // Toward the metallic layer it turns opaque and mirror-bright: shimmering bands of liquid metal.
+        if (uLocalT > 600.0) {
+          float metal = smoothstep(3200.0, 5200.0, uLocalT);
+          vec3 g = emit(uLocalT * (1.0 - 0.12 * rd.y)) * (0.3 + 0.7 * metal);
+          vec2 cq = rd.xz / max(abs(rd.y), 0.15) * 2.0 + vec2(uTime * 0.05, 0.0);
+          float caust = pow(1.0 - abs(2.0 * fbm(cq + fbm(cq * 0.7, 2) * 1.5, 4) - 1.0), 6.0);
+          c += g + vec3(0.9, 0.93, 1.0) * caust * metal * (0.25 + 0.5 * uHigh);
         }
         c = mix(c, c * vec3(1.25, 0.82, 0.72), uVortex * 0.6);
         c *= umbra(ro.xz);
@@ -751,91 +1196,106 @@
         return c;
       }
 
-      vec2 swirl(vec2 w, float tt) {
+      vec2 swirl(vec2 w, float tt, float strength) {
         vec2 d = w - uVortexC.xy;
         float r = length(d);
         float R = uVortexC.z;
-        float a = (1.6 * exp(-r / R) + tt * 0.12 / (1.0 + r * r / (R * R))) * uVortex;
+        float a = (1.6 * exp(-r / R) + tt * 0.12 / (1.0 + r * r / (R * R))) * strength;
         return uVortexC.xy + rot2(a) * d;
       }
 
-      float baseDens(int i, vec2 w, float sc, int oct) {
-        vec2 q = w * sc;
-        float wp = fbm(q * 0.45 + vec2(float(i) * 3.1, uTime * 0.015), 3);
-        q += (wp - 0.5) * (1.4 + uBass * 1.2);
-        float d = fbm(q + vec2(uTime * 0.01, 0.0), oct);
-        if (i == 1 || i == 4) d = mix(d, 1.0 - worley(q * 1.3 + (wp - 0.5) * 1.5), 0.32);
-        return d;
+      // Sound written into the clouds as inertia-gravity wave packets: low pitch, long crests (cf. Orton et al. 2020)
+      float waves(vec2 w) {
+        float s = 0.0;
+        for (int i = 0; i < 6; i++) {
+          float fi = float(i);
+          float k = 0.35 * pow(1.7, fi);
+          float env = 0.5 + 0.5 * sin(w.y * 0.07 + fi * 1.7);
+          s += uWaveA[i] * sin(w.x * k - uTime * (0.6 + 0.35 * fi) + fi * 2.1) * env;
+        }
+        return s;
       }
 
-      float dens(int i, vec2 w, float sc, int oct) {
-        if (uVortex < 0.01) return baseDens(i, w, sc, oct);
+      float baseDens(int i, vec2 w, float sc, int oct) {
+        // Turbulent energy cascades upscale: sustained sound grows bigger eddies
+        vec2 q = w * sc / (1.0 + uTurb * 0.6);
+        float wp = fbm(q * 0.45 + vec2(float(i) * 3.1, uTime * 0.015), 3);
+        q += (wp - 0.5) * (1.2 + uTurb * 2.0 + uBass * 0.6);
+        float d = fbm(q + vec2(uTime * 0.01, 0.0), oct);
+        if (i == 1 || i == 5) d = mix(d, 1.0 - worley(q * 1.3 + (wp - 0.5) * 1.5), 0.32);
+        return d + waves(w) * (i <= 3 ? 1.0 : 0.4);
+      }
+
+      float dens(int i, vec2 w, float sc, int oct, float vortexK) {
+        if (vortexK < 0.01) return baseDens(i, w, sc, oct);
         // Two-phase flow so the vortex can turn forever without smearing
         float P = 10.0;
         float f1 = fract(uTime / P);
         float f2 = fract(uTime / P + 0.5);
-        float d1 = baseDens(i, swirl(w, f1 * P), sc, oct);
-        float d2 = baseDens(i, swirl(w, f2 * P), sc, oct);
+        float d1 = baseDens(i, swirl(w, f1 * P, vortexK), sc, oct);
+        float d2 = baseDens(i, swirl(w, f2 * P, vortexK), sc, oct);
         return mix(d1, d2, abs(1.0 - 2.0 * f1));
       }
 
       vec4 shadeLayer(int i, vec3 ro, vec3 rd, float t, vec3 bg) {
-        float h; float sc; float cover; float op; vec3 lit; vec3 dark;
-        layerParams(i, h, sc, cover, op, lit, dark);
+        float h; float sc; float cover; float op; vec3 lit; vec3 dark; float Te;
+        layerParams(i, h, sc, cover, op, lit, dark, Te);
         vec2 w = ro.xz + rd.xz * t;
         int oct = t < 10.0 ? 5 : (t < 30.0 ? 4 : 3);
-        float d = dens(i, w, sc, oct);
-        cover -= uMid * 0.1;
+        // The GRS reaches 300–500 km down (Juno MWR and gravity): its swirl fades by the Na₂S deck
+        float vortexK = uVortex * smoothstep(-10.5, -6.0, h);
+        float d = dens(i, w, sc, oct, vortexK);
+        cover -= uMid * 0.1 + uConv * 0.12;
         float a = smoothstep(cover, cover + 0.22, d) * op;
         if (i == 0) a = op * (0.4 + 0.6 * a);
         a *= smoothstep(0.04, 0.7, abs(h - ro.y));
         float top = smoothstep(cover, cover + 0.45, d);
         bool under = ro.y < h;
-        vec3 c = under ? mix(lit * 0.72, dark, top * 0.8) : mix(dark, lit, top);
-        if (t < 30.0 && uVortex < 0.01 && i > 0) {
-          // Relief: compare with a sample nudged toward the Sun
-          float d2 = baseDens(i, w + vec2(0.5, -0.35), sc, min(oct, 4));
-          c *= 1.0 + clamp((d - d2) * 3.2, -0.45, 0.45) * (1.0 - t / 30.0) * (under ? 0.5 : 1.0);
+        vec3 c;
+        if (Te > 0.0) {
+          // Self-luminous: gaps show the hotter gas below, updrafts carry heat up with the sound's energy
+          float Tc = Te + (0.5 - top) * 520.0 + uConv * 380.0 * d - (under ? 220.0 : 0.0);
+          c = emit(Tc);
+          a = smoothstep(cover - 0.1, cover + 0.3, d) * op * smoothstep(0.04, 0.7, abs(h - ro.y))
+            * (1.0 - smoothstep(3.0, 6.0, abs(h - ro.y)));
+        } else {
+          c = under ? mix(lit * 0.72, dark, top * 0.8) : mix(dark, lit, top);
+          if (t < 30.0 && vortexK < 0.01 && i > 0) {
+            // Relief: compare with a sample nudged toward the Sun; convection raises the towers
+            float d2 = baseDens(i, w + vec2(0.5, -0.35), sc, min(oct, 4));
+            c *= 1.0 + clamp((d - d2) * 3.2 * (1.0 + uConv * 1.5), -0.5, 0.5) * (1.0 - t / 30.0) * (under ? 0.5 : 1.0);
+          }
+          // Real band colours (Hubble 2019) around the Galileo entry latitude, 6.5°N; latitude = world z
+          vec3 band = realProfile(radians(6.5 - w.y * 0.12)) / 0.72;
+          band = mix(band, vec3(1.9) - band, uJovi);   // below ~5–10 bar the belt/zone contrast inverts (Fletcher 2021)
+          c = mix(c, c * band, uBandTint * (i <= 1 ? 1.0 : 0.4));
+          c *= mix(0.08, 1.0, uSunLight);
+          if (i <= 2) c *= umbra(w);
+          if (i == 2 || i == 3) {
+            vec2 fd = w - uFlash.yz;
+            float fl = uFlash.x * exp(-dot(fd, fd) / 40.0);
+            c += vec3(0.72, 0.8, 1.0) * fl * (i == 3 ? 1.5 : 0.6);
+          }
+          if (uLocalT > 600.0 && under) c += emit(uLocalT + 150.0) * 0.4;
         }
 
-        // Trouvelot's band colours, latitude = world z
-        vec3 band = profile(clamp(w.y * 0.02 + 0.06, -0.98, 0.98)) / 0.8;
-        c = mix(c, c * band, uBandTint * (i <= 1 ? 1.0 : 0.4));
-
-        if (i == 4) {
-          // Mercury sea: liquid metal reflecting the plate's bands
-          vec3 rf = reflect(rd, normalize(vec3((d - 0.5) * 0.6, 1.0, (top - 0.5) * 0.6)));
-          vec3 env = profile(clamp(rf.y * 0.95, -0.98, 0.98));
-          vec3 metal = mix(vec3(0.3, 0.31, 0.34), vec3(0.92, 0.93, 0.97), smoothstep(0.4, 0.85, dot(env, vec3(0.33))));
-          metal = mix(metal, vec3(0.6, 0.62, 0.66), smoothstep(10.0, 40.0, t));
-          c = mix(c, metal, 0.7);
-          c *= 0.5 + uWestGlow * 0.5;
-        }
-
-        if (uVortex > 0.01 && i >= 1 && i <= 3) {
+        if (vortexK > 0.01 && i <= 3) {
           float r = length(w - uVortexC.xy) / uVortexC.z;
           float inside = 1.0 - smoothstep(0.85, 1.0, r);
           float ring = smoothstep(0.8, 1.0, r) * (1.0 - smoothstep(1.1, 1.5, r));
-          float k = i == 3 ? 0.35 : 1.0;
-          c = mix(c, c * VERMILION, inside * uVortex * k);
-          c = mix(c, RING_COL * (under ? 0.62 : 1.0), ring * uVortex * top * 0.8 * k);
-        }
-
-        if (i <= 2) c *= umbra(w);
-
-        if (i == 2 || i == 3) {
-          vec2 fd = w - uFlash.yz;
-          float fl = uFlash.x * exp(-dot(fd, fd) / 40.0);
-          c += vec3(0.72, 0.8, 1.0) * fl * (i == 3 ? 1.5 : 0.6);
+          // Red chromophore: a thin coating high above the vortex (Carlson et al. 2016)
+          float kk = i == 0 ? 1.2 : (i == 3 ? 0.35 : 1.0);
+          c = mix(c, c * (i == 0 ? vec3(1.15, 0.5, 0.32) : VERMILION), inside * vortexK * min(kk, 1.0));
+          c = mix(c, RING_COL * (under ? 0.62 : 1.0) * uSunLight, ring * vortexK * top * 0.8 * min(kk, 1.0));
         }
 
         float f = 1.0 - exp(-t * 0.028);
         c = mix(c, bg, f);
-        a *= 1.0 - smoothstep(55.0, 90.0, t);
+        a *= 1.0 - smoothstep(Te > 0.0 ? 20.0 : 55.0, 90.0, t);
         return vec4(c, a);
       }
 
-      // The west cloud: a silver (mercury) cumulus mirroring Trouvelot's bands
+      // The west cloud: a towering, incandescent rock-and-iron cumulus in the deep layer
       vec4 westCloud(vec3 ro, vec3 rd, out float tHit, out vec3 glow) {
         tHit = 1e4;
         glow = vec3(0.0);
@@ -860,17 +1320,15 @@
         float tex2 = fbm(perp.zy * 4.0 + vec2(7.3, uTime * 0.017), 4);
         vec3 n = normalize((hp - uWest.xyz) / Rb + vec3(0.0, tex - 0.5, tex2 - 0.5) * 0.9);
         vec3 rf = reflect(rd, n);
-        vec3 env = profile(clamp(rf.y * 0.95, -0.98, 0.98));
-        float lum = dot(env, vec3(0.33));
-        vec3 col = mix(vec3(0.42, 0.44, 0.48), vec3(0.95, 0.96, 1.0), smoothstep(0.35, 0.85, lum));
-        col = mix(col, env * 1.1, 0.25);
+        float Tw = uWestT + (tex - 0.5) * 900.0 - (1.0 - max(-n.y, 0.0)) * 300.0;
+        vec3 col = emit(Tw);
+        // Liquid-iron sheen: the incandescent deck below mirrored in the droplets
         float fres = pow(1.0 - max(dot(-rd, n), 0.0), 3.0);
-        col += fres * 0.35 + pow(max(dot(rf, normalize(vec3(-0.3, 0.8, 0.5))), 0.0), 30.0) * 0.8;
-        col *= 0.45 + uWestGlow;
+        col += (rf.y < 0.0 ? emit(uWestT + 400.0) : emit(uLocalT) * 0.4) * (0.15 + fres * 0.7);
         float fogd = 1.0 - exp(-max(tHit, 0.0) * 0.006);
-        col = mix(col, ambientAt(ro.y), fogd * 0.85);
+        col = mix(col, emit(uLocalT) * 0.5, fogd * 0.7);
         float halo = exp(-max(dmin - Rb, 0.0) / (R * 0.25));
-        glow = vec3(0.75, 0.78, 0.85) * halo * (1.0 - m) * (0.15 + uWestGlow * 0.4) * (1.0 - fogd) * inside;
+        glow = emit(uWestT - 300.0) * halo * (1.0 - m) * 0.35 * (1.0 - fogd) * inside;
         return vec4(col, m);
       }
 
@@ -892,6 +1350,25 @@
         return acc * uMoteTint * uMotes * (0.6 + uHigh * 1.2);
       }
 
+      // Falling streaks: ammonia-water mushballs above, liquid iron below
+      vec3 rain(vec2 p) {
+        if (uRain <= 0.01) return vec3(0.0);
+        vec3 acc = vec3(0.0);
+        for (int i = 0; i < 3; i++) {
+          float fi = float(i);
+          float sc = 16.0 + fi * 13.0;
+          vec2 q = vec2((p.x + p.y * 0.12) * sc, p.y * sc * 0.35 + uTime * (1.4 + fi * 0.9) * (1.0 + uConv));
+          vec2 id = floor(q);
+          vec2 f = fract(q) - 0.5;
+          float h = hash12(id + fi * 7.0);
+          float x = (hash12(id + 3.1) - 0.5) * 0.6;
+          float len = 0.15 + 0.3 * hash12(id + 8.3);
+          float streak = (1.0 - smoothstep(0.015, 0.06, abs(f.x - x))) * smoothstep(len, -0.1, f.y) * smoothstep(-0.5, -0.3, f.y);
+          acc += streak * step(1.0 - uRain * 0.14, h) / (1.0 + fi * 0.6);
+        }
+        return acc * uRainTint * uRain * 0.7;
+      }
+
       vec3 flight(vec2 p) {
         p = rot2(uCamAng.z) * p;
         float yaw = uCamAng.x;
@@ -910,10 +1387,10 @@
         vec3 acc = vec3(0.0);
         float T = 1.0;
         int hits = 0;
-        for (int j = 0; j < 5; j++) {
-          int i = rd.y < 0.0 ? j : 4 - j;
-          float h; float sc; float cover; float op; vec3 lit; vec3 dark;
-          layerParams(i, h, sc, cover, op, lit, dark);
+        for (int j = 0; j < 7; j++) {
+          int i = rd.y < 0.0 ? j : 6 - j;
+          float h; float sc; float cover; float op; vec3 lit; vec3 dark; float Te;
+          layerParams(i, h, sc, cover, op, lit, dark, Te);
           float dy = h - ro.y;
           if (dy * rd.y <= 0.0 || abs(rd.y) < 1e-4) continue;
           float t = dy / rd.y;
@@ -938,12 +1415,145 @@
             a += smoothstep(0.35, 0.75, n);
           }
           a /= 5.0;
-          vec3 fc = uFog.rgb * (0.8 + 0.4 * a);
-          fc = mix(fc, fc * profile(clamp(rd.y * 0.8 + sin(uTime * 0.1) * 0.1, -0.98, 0.98)) * 1.25, uWestInside);
-          col = mix(col, fc, clamp(uFog.w * (0.55 + 0.6 * a), 0.0, 1.0));
+          col = mix(col, uFog.rgb * (0.8 + 0.4 * a), clamp(uFog.w * (0.55 + 0.6 * a), 0.0, 1.0));
         }
-        col += motes(p);
+        col += motes(p) + rain(p);
         return col;
+      }
+
+      // ---------------- BARDO: mirror mosaic (āyeneh-kāri, as in Shah Cheragh) ----------------
+
+      // Khatam: the 8-point star of two squares; returns the distance to the nearest joint
+      float khatam(vec2 f, out float region) {
+        float dA = max(abs(f.x), abs(f.y));
+        float dB = (abs(f.x) + abs(f.y)) * 0.70711;
+        float star = min(dA, dB) - 0.34;
+        float oct = max(dA, dB) - 0.34;
+        float sector = floor((atan(f.y, f.x) + PI) / (PI * 0.25));
+        region = oct < 0.0 ? sector : (star < 0.0 ? 8.0 + sector : 16.0 + sector);
+        return min(min(abs(star), abs(oct)), 0.5 - dA);
+      }
+
+      // Each shard catches a different patch of a room full of lamps; star points silver, centre gilded, ground greener
+      vec3 mirrorFacet(vec3 fid, vec2 q) {
+        vec2 h = hash22(fid.xy * 1.37 + fid.z * 17.17);
+        float h2 = hash12(fid.xy * 3.11 + fid.z * 5.3);
+        vec3 n = normalize(vec3((h - 0.5) * 1.1 + q * 0.7, 1.0));
+        vec3 R = reflect(vec3(0.0, 0.0, -1.0), n);
+        float t = uBardoT;
+        float lampA = pow(max(dot(R, normalize(vec3(cos(t * 0.37), sin(t * 0.37), 0.5))), 0.0), 24.0);
+        float lampB = pow(max(dot(R, normalize(vec3(cos(-t * 0.23 + 2.1), sin(-t * 0.23 + 2.1), 0.6))), 0.0), 24.0);
+        float lampC = pow(max(dot(R, normalize(vec3(cos(t * 0.11 + 4.0), sin(t * 0.11 + 4.0), 0.35))), 0.0), 30.0);
+        float core = pow(max(dot(R, normalize(vec3(-q * 0.8, 1.0))), 0.0), 18.0);
+        // The planet in the mirrors: Hubble band colours
+        vec3 env = texture2D(uRealProfile, vec2(clamp(0.5 - R.y * 0.45, 0.01, 0.99), 0.5)).rgb;
+        vec3 c = env * 0.25 * (0.25 + 0.75 * h2 * h2)
+          + vec3(1.0, 0.97, 0.92) * core * (0.8 + uBardo.w)
+          + vec3(0.55, 1.0, 0.8) * lampA * 0.9
+          + vec3(1.0, 0.85, 0.6) * lampB * 0.9
+          + vec3(0.8, 0.85, 1.0) * lampC * 0.7;
+        float region = fid.z;
+        c *= region < 7.5 ? vec3(1.0, 0.86, 0.6) : (region < 15.5 ? vec3(1.0) : vec3(0.72, 0.86, 0.8));
+        c += vec3(1.0) * pow(max(0.0, sin(t * (0.8 + h.x * 2.0) + h2 * 40.0)), 24.0) * (0.5 + uHigh) * step(0.6, h.y);
+        return c;
+      }
+
+      // Conformal log-polar lattice: square cells that shrink without end toward the centre
+      vec3 rosette(vec2 q, float rot, float N, float size, float flow) {
+        float r = length(q) / size;
+        if (r > 1.05) return vec3(0.0);
+        float k = N / TAU;
+        float ur = log(max(r, 1e-4)) * k + flow;
+        float par = mod(floor(ur), 2.0);
+        float vr = (atan(q.y, q.x) + rot) * k + par * 0.5 + (par * 2.0 - 1.0) * uBardoT * 0.03;
+        vec2 lp = vec2(ur, vr);
+        vec2 f = fract(lp) - 0.5;
+        float region;
+        float edge = khatam(f, region);
+        vec3 c = mirrorFacet(vec3(floor(lp), region), q / size);
+        float cellPx = uRes.y * size * max(r, 1e-4) * TAU / N;
+        // Joints between the pieces: a dark drawing on the glitter
+        c *= mix(1.0, 0.25, (1.0 - smoothstep(0.0, max(1.2 / cellPx, 0.025), edge)));
+        c = mix(vec3(0.35, 0.36, 0.34) * (0.6 + uBardo.w), c, smoothstep(3.0, 9.0, cellPx));
+        return c;
+      }
+
+      // Khatam silhouette: < 1 inside an 8-point star made of two squares of half-size s
+      float starShape(vec2 q, float s) {
+        return min(max(abs(q.x), abs(q.y)), (abs(q.x) + abs(q.y)) * 0.70711) / s;
+      }
+
+      vec3 bardo(vec2 p) {
+        float R = uBardo.y;
+        if (R < 1e-3) return vec3(0.0);
+        float r = length(p);
+        float a = atan(p.y, p.x);
+        float rot = uBardo.z;
+        float px = 1.5 / uRes.y;
+        // Fewer, larger pieces when the mosaic is a small jewel in the dark
+        float jewel = 1.0 - smoothstep(0.1, 0.3, R);
+        // The dome: a field of small mirrors
+        vec3 c = rosette(p, rot * 0.5, mix(32.0, 12.0, jewel), R * 1.05, -uBardoT * 0.12) * 0.75;
+        // A great eight-point star at the centre, with its own lattice
+        float s0 = starShape(rot2(rot) * p, R * 0.34);
+        c = mix(c, rosette(p, rot, mix(16.0, 10.0, jewel), R * 0.5, -uBardoT * 0.18) * 1.15, 1.0 - smoothstep(0.98, 1.0, s0));
+        vec3 gold = vec3(1.0, 0.86, 0.58);
+        c += gold * (1.0 - smoothstep(0.0, px * 2.0 / (R * 0.34), abs(s0 - 1.0))) * 0.9;
+        // Eight smaller stars around it — Juno's north polar vortex crystal, eight around one
+        float ca = floor((a - rot * 0.4) / (TAU / 8.0) + 0.5) * TAU / 8.0 + rot * 0.4;
+        vec2 cc = vec2(cos(ca), sin(ca)) * R * 0.72;
+        float s1 = starShape(rot2(-rot * 2.0 + ca) * (p - cc), R * 0.13);
+        c = mix(c, rosette(p - cc, -rot * 2.0 - uBardoT * 0.1, mix(8.0, 6.0, jewel), R * 0.19, -uBardoT * 0.25) * 1.1, 1.0 - smoothstep(0.97, 1.0, s1));
+        c += gold * (1.0 - smoothstep(0.0, px * 2.0 / (R * 0.13), abs(s1 - 1.0))) * 0.8;
+        // Girih frame traced in light
+        float sf = starShape(rot2(rot) * p, R * 0.66);
+        c += vec3(0.9, 0.95, 0.85) * (1.0 - smoothstep(0.0, px * 2.0 / (R * 0.66), abs(sf - 1.0))) * 0.4;
+        // A ring of light runs outward on each onset
+        c *= 1.0 + 2.0 * uBardoWave.y * exp(-pow((r - uBardoWave.x * R) / (0.04 * R + 0.005), 2.0));
+        // Clear light at the centre
+        float core = exp(-r * r / (R * R * (0.0011 + 0.008 * uBardo.w))) * (1.0 + uLoud);
+        float rays = pow(abs(cos(4.0 * (a - rot))), 120.0) * exp(-r / (R * (0.08 + 0.13 * uBardo.w)));
+        c *= mix(1.0, 0.55, jewel);
+        c += vec3(1.0, 0.98, 0.93) * (core + rays * 0.35) * uBardo.w * mix(1.0, 0.7, jewel);
+        // Mirror light turned cyan, as in the image of the end
+        c = mix(c, c * vec3(0.45, 1.0, 1.1) + vec3(0.0, 0.03, 0.04) * uBardo.w, uBardoCyan);
+        return c * (1.0 - smoothstep(0.96, 1.06, r / R));
+      }
+
+      // A tangle of glowing cyan threads: tumbling rings of particles seen in projection
+      vec3 strands(vec2 p) {
+        float R = uStrands.y;
+        if (uStrands.x <= 0.001 || length(p) > R * 1.8) return vec3(0.0);
+        float t = uBardoT;
+        float px = 1.0 / uRes.y;
+        vec3 acc = vec3(0.0);
+        for (int k = 0; k < 9; k++) {
+          float fk = float(k);
+          float a1 = t * (0.11 + 0.05 * fk) + fk * 1.7;
+          float a2 = t * (0.07 + 0.03 * fk) + fk * 2.9;
+          vec3 u = vec3(cos(a1), sin(a1) * cos(a2), sin(a1) * sin(a2));
+          vec3 w = normalize(vec3(-sin(a1 + 0.7 * fk), cos(a1 + 0.7 * fk) * cos(a2 + 1.3), sin(a2 + 1.3)));
+          vec3 v = normalize(cross(u, w));
+          float rad = R * (0.5 + 0.45 * hash12(vec2(fk, 1.3)));
+          vec2 A = u.xy * rad;
+          vec2 B = v.xy * rad;
+          float det = A.x * B.y - A.y * B.x;
+          float minDet = rad * rad * 0.08;
+          if (abs(det) < minDet) det = det < 0.0 ? -minDet : minDet;
+          vec2 ab = vec2(B.y * p.x - B.x * p.y, -A.y * p.x + A.x * p.y) / det;
+          float phi = atan(ab.y, ab.x);
+          float wob = 1.0 + 0.12 * sin(3.0 * phi + fk + t * 0.5) + 0.08 * sin(5.0 * phi - t * 0.3 + fk * 2.0)
+            + uLoud * 0.07 * sin(9.0 * phi + t * 2.0);
+          float d = abs(length(ab) - wob) * min(length(A), length(B));
+          // Particles strung along each ring, twinkling
+          float seg = floor((phi + PI) / TAU * 160.0);
+          float on = step(0.42, hash12(vec2(seg, fk * 7.0 + floor(t * 3.0 + fk))));
+          float z = cos(phi) * u.z + sin(phi) * v.z;
+          float line = exp(-d * d / (px * px * (1.2 + 1.8 * on))) * (0.3 + 0.7 * on) * (0.8 + uHigh * 0.6);
+          acc += mix(vec3(0.02, 0.32, 0.4), vec3(0.32, 0.95, 1.0), smoothstep(-0.6, 0.6, z)) * line;
+        }
+        acc += vec3(0.05, 0.35, 0.4) * exp(-dot(p, p) / (R * R * 0.25)) * 0.12;
+        return acc * uStrands.x;
       }
 
       void main() {
@@ -954,8 +1564,10 @@
         col = mix(col, HAZE_WHITE, uWhite);
         float v = smoothstep(1.25, 0.35, length(p * vec2(0.85, 1.0)));
         col *= mix(0.55, 1.0, v);
-        // Lithograph grain
-        col += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 100.0) - 0.5) * 0.035;
+        col *= 1.0 - uBardoDark;
+        if (uBardo.x > 0.001) col += bardo(p) * uBardo.x;
+        if (uStrands.x > 0.001) col += strands(p);
+        col += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 100.0) - 0.5) * uGrain;
         col *= uFade;
         gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
       }
@@ -980,34 +1592,177 @@
     window.addEventListener("resize", syncSize)
 
     // ------------------------------------------------------------
-    // AUDIO — digital gain trim (hardware sensitivity can't be set in browser)
-    // https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
+    // PLANET CAMERA — from the eyepiece in 1880 to Juno's perijove
     // ------------------------------------------------------------
 
-    const fftBins = new Float32Array(8)
+    const DEG = Math.PI / 180
+    const OBL = 0.9355
+    const PLATE_R_SCREEN = 0.3884
+
+    function sph(latDeg, lonDeg, d) {
+      const la = latDeg * DEG
+      const lo = lonDeg * DEG
+      return new THREE.Vector3(d * Math.cos(la) * Math.sin(lo), d * Math.sin(la), d * Math.cos(la) * Math.cos(lo))
+    }
+    function localFrame(latDeg, lonDeg) {
+      const la = latDeg * DEG
+      const lo = lonDeg * DEG
+      return {
+        r: new THREE.Vector3(Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)),
+        n: new THREE.Vector3(-Math.sin(la) * Math.sin(lo), Math.cos(la), -Math.sin(la) * Math.cos(lo)),
+        e: new THREE.Vector3(Math.cos(lo), 0, -Math.sin(lo))
+      }
+    }
+    const screenUp = (deg) => new THREE.Vector3(-Math.sin(deg * DEG), -Math.cos(deg * DEG), 0)
+    const toward = (lat, lon, d, target) => target.clone().sub(sph(lat, lon, d)).normalize()
+    function ahead(lat, lon, down, along) {
+      const f = localFrame(lat, lon)
+      return f.r.clone().multiplyScalar(-down).add(along(f)).normalize()
+    }
+
+    function key(u, lat, lon, d, fwd, up, fov) {
+      return { u, v: [lat, lon, Math.log(d - 1), fov, fwd.x, fwd.y, fwd.z, up.x, up.y, up.z] }
+    }
+    const PLANET_KEYS = [
+      // The eyepiece: south up, equator tilted as in the plate
+      key(0, 0, 0, 18.44, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
+      key(0.075, 0, 0, 16.04, new THREE.Vector3(0, 0, -1), screenUp(8.9), 8),
+      key(0.1, 0, 0, 9.0, new THREE.Vector3(0, 0, -1), screenUp(8.9), 12),
+      // Leaving the telescope: the image turns north-up
+      key(0.112, 6, 0, 7.0, toward(6, 0, 7.0, new THREE.Vector3(0, 0.1, 0)), screenUp(94), 15),
+      key(0.125, 22, 0, 5.0, toward(22, 0, 5.0, new THREE.Vector3(0, 0.25, 0)), new THREE.Vector3(0, 1, 0), 20),
+      // Juno arrives over the north pole
+      key(0.138, 55, 0, 2.9, toward(55, 0, 2.9, new THREE.Vector3(0, 0.85, 0.1)), localFrame(55, 0).n, 32),
+      key(0.148, 80, 0, 1.95, toward(80, 0, 1.95, new THREE.Vector3(0, OBL, 0)), localFrame(80, 0).n, 42),
+      // The spacecraft turns above the cyclone crystal
+      key(0.153, 82, 0, 1.75, localFrame(82, 0).r.negate(), localFrame(82, 0).e, 44),
+      key(0.158, 80, 0, 1.6, localFrame(80, 0).r.negate(), localFrame(80, 0).n.negate(), 46),
+      // Perijove dash south over the belts, then west toward the Galileo entry site (6.5°N)
+      key(0.168, 58, 0, 1.14, ahead(58, 0, 0.55, (f) => f.n.multiplyScalar(-0.83)), localFrame(58, 0).r, 55),
+      key(0.18, 24, -1, 1.03, ahead(24, -1, 0.35, (f) => f.n.multiplyScalar(-0.94)), localFrame(24, -1).r, 60),
+      key(0.19, 9, -2, 1.008, ahead(9, -2, 0.3, (f) => f.e.multiplyScalar(-0.95)), localFrame(9, -2).r, 62),
+      key(0.2, 6.5, -4, 1.0004, ahead(6.5, -4, 0.56, (f) => f.e.multiplyScalar(-0.83)), localFrame(6.5, -4).r, 62)
+    ]
+
+    // Monotone cubic Hermite per component (harmonic-mean tangents: no overshoot between keys)
+    function keyTangent(i) {
+      const p = PLANET_KEYS[i].v
+      if (i === 0 || i === PLANET_KEYS.length - 1) return p.map(() => 0)
+      const a = PLANET_KEYS[i - 1]
+      const b = PLANET_KEYS[i + 1]
+      const ha = PLANET_KEYS[i].u - a.u
+      const hb = b.u - PLANET_KEYS[i].u
+      return p.map((v, c) => {
+        const d0 = (v - a.v[c]) / ha
+        const d1 = (b.v[c] - v) / hb
+        return d0 * d1 <= 0 ? 0 : 2 / (1 / d0 + 1 / d1)
+      })
+    }
+    const KEY_TANGENTS = PLANET_KEYS.map((_, i) => keyTangent(i))
+    function planetKeyAt(u) {
+      const n = PLANET_KEYS.length
+      if (u <= PLANET_KEYS[0].u) return PLANET_KEYS[0].v
+      if (u >= PLANET_KEYS[n - 1].u) return PLANET_KEYS[n - 1].v
+      let i = 0
+      while (u > PLANET_KEYS[i + 1].u) i++
+      const k0 = PLANET_KEYS[i]
+      const k1 = PLANET_KEYS[i + 1]
+      const h = k1.u - k0.u
+      const s = (u - k0.u) / h
+      const s2 = s * s
+      const s3 = s2 * s
+      const m0 = KEY_TANGENTS[i]
+      const m1 = KEY_TANGENTS[i + 1]
+      return k0.v.map(
+        (v, c) =>
+          (2 * s3 - 3 * s2 + 1) * v + (s3 - 2 * s2 + s) * h * m0[c] + (-2 * s3 + 3 * s2) * k1.v[c] + (s3 - s2) * h * m1[c]
+      )
+    }
+
+    const planetCam = { d: 18.44, F: 7.15 }
+    const _m4 = new THREE.Matrix4()
+    const _target = new THREE.Vector3()
+    const _up = new THREE.Vector3()
+    function updatePlanetCamera(u) {
+      const [lat, lon, logAlt, fov, fx, fy, fz, ux, uy, uz] = planetKeyAt(u)
+      const d = 1 + Math.exp(logAlt)
+      const pos = uniforms.uPCam.value.copy(sph(lat, lon, d))
+      _target.set(fx, fy, fz).normalize().add(pos)
+      _m4.lookAt(pos, _target, _up.set(ux, uy, uz).normalize())
+      uniforms.uPRight.value.setFromMatrixColumn(_m4, 0)
+      uniforms.uPUp.value.setFromMatrixColumn(_m4, 1)
+      uniforms.uPFwd.value.setFromMatrixColumn(_m4, 2).negate()
+      planetCam.d = d
+      planetCam.F = 0.5 / Math.tan((fov * DEG) / 2)
+      uniforms.uPF.value = planetCam.F
+      // The plate is laid over the globe at exactly the size the camera sees it
+      uniforms.uZoom.value = planetCam.F / Math.sqrt(d * d - 1) / PLATE_R_SCREEN
+    }
+
+    // Galilean moons placed so the opening frame reproduces the plate, lit by one physical Sun:
+    // the Sun direction comes from the first moon and the shadow Trouvelot drew beside it.
+    // Plate coordinates run along the drawn equator and polar axis: planet −x and −y (south up)
+    const D0 = 1 + Math.exp(PLANET_KEYS[0].v[2])
+    const platePoint = (a, b) => new THREE.Vector3(-a, -b * OBL, 0)
+    // A point at depth z on the eyepiece ray through plate coordinates (a, b)
+    function onRay(a, b, z) {
+      const v = platePoint(a, b)
+      return new THREE.Vector3((v.x * (D0 - z)) / D0, (v.y * (D0 - z)) / D0, z)
+    }
+    // Where that ray meets the spheroid
+    function surfaceOnRay(a, b) {
+      const v = platePoint(a, b)
+      const qa = v.x * v.x + (v.y / OBL) ** 2 + D0 * D0
+      const s = (D0 * D0 - Math.sqrt(Math.max(0, D0 ** 4 - qa * (D0 * D0 - 1)))) / qa
+      return new THREE.Vector3(s * v.x, s * v.y, D0 * (1 - s))
+    }
+    const shadow1 = surfaceOnRay(-0.462, 0.255)
+    const moon1Probe = onRay(-0.648, 0.387, shadow1.z)
+    const moon1 = onRay(-0.648, 0.387, shadow1.z + moon1Probe.distanceTo(shadow1) / Math.tan(10 * DEG))
+    // 1880: the Sun implied by moon 1 and the shadow beside it. Juno era: subsolar point ~3°N, lighting the north pole.
+    const SUN_1880 = moon1.clone().sub(shadow1).normalize()
+    const SUN_JUNO = sph(3, 25, 1)
+    const moon2 = onRay(-0.849, 0.238, surfaceOnRay(-0.849, 0.238).z + 0.35)
+    // The black disc on the Red Spot: a dark transit of Ganymede, as 19th-century observers saw them
+    const moon3 = onRay(0.094, 0.4, surfaceOnRay(0.094, 0.4).z + 0.25)
+    const moon4 = onRay(-0.47, 0.15, -2.6)
+    const MOONS = [
+      { p0: moon1, w: 0.03, col: [0.93, 0.86, 0.55], flat: [0.93, 0.92, 0.86] },
+      { p0: moon2, w: 0.019, col: [0.88, 0.85, 0.78], flat: [0.93, 0.92, 0.86] },
+      { p0: moon3, w: 0.012, col: [0.62, 0.58, 0.52], flat: [0.06, 0.055, 0.05] },
+      { p0: moon4, w: 0.006, col: [0.42, 0.39, 0.35], flat: [0.93, 0.92, 0.86] }
+    ]
+    MOONS.forEach((m, i) => {
+      uniforms.uMoonCol.value[i].fromArray(m.col)
+      uniforms.uMoonFlat.value[i].fromArray(m.flat)
+    })
+
+    const ROT_RATE = 1.76e-4 * 20
+    const AURORA_LAT = 80.5 * DEG
+    const AURORA_LON = 2.6
+
+    // ------------------------------------------------------------
+    // AUDIO — max gain, float spectrum, adaptive range per band
+    // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/getFloatFrequencyData
+    // ------------------------------------------------------------
+
+    const BANDS = [[30, 90], [90, 250], [250, 700], [700, 2000], [2000, 5000], [5000, 12000]]
+    const bandState = BANDS.map(() => ({ floor: -70, peak: -30, v: 0 }))
+    const aud = { low: 0, mid: 0, high: 0, loud: 0, onset: 0, bands: new Float32Array(6) }
     let audioCtx = null
     let analyser = null
-    let freqData = null
+    let spectrum = null
     let micGainNode = null
+    let micSensitivity = 12
 
-    let micSensitivity = Number(localStorage.getItem("hydraMicGain") ?? 3)
-    if (Number.isNaN(micSensitivity)) micSensitivity = 3
-
-    const micPanel = document.getElementById("mic-panel")
     const micGainInput = document.getElementById("mic-gain")
     const micGainVal = document.getElementById("mic-gain-val")
     micGainInput.value = String(micSensitivity)
     micGainVal.textContent = micSensitivity.toFixed(1)
-
-    function applyMicGain(v) {
-      micSensitivity = v
-      if (micGainNode != null) micGainNode.gain.value = v
-      micGainVal.textContent = v.toFixed(1)
-      localStorage.setItem("hydraMicGain", String(v))
-    }
-
     micGainInput.addEventListener("input", () => {
-      applyMicGain(Number(micGainInput.value))
+      micSensitivity = Number(micGainInput.value)
+      if (micGainNode != null) micGainNode.gain.value = micSensitivity
+      micGainVal.textContent = micSensitivity.toFixed(1)
     })
 
     async function startMic() {
@@ -1015,7 +1770,7 @@
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: true
+          autoGainControl: false
         },
         video: false
       })
@@ -1024,55 +1779,55 @@
       micGainNode = audioCtx.createGain()
       micGainNode.gain.value = micSensitivity
       analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 512
-      analyser.smoothingTimeConstant = 0.78
+      analyser.fftSize = 2048
+      analyser.smoothingTimeConstant = 0.5
       source.connect(micGainNode)
       micGainNode.connect(analyser)
-      freqData = new Uint8Array(analyser.frequencyBinCount)
+      spectrum = new Float32Array(analyser.frequencyBinCount)
     }
 
-    function sampleFft() {
-      if (analyser == null || freqData == null) return
-      analyser.getByteFrequencyData(freqData)
-      const n = freqData.length
-      const per = Math.floor(n / 8)
-      const scale = 1.2 + micSensitivity * 0.35
-      for (let i = 0; i < 8; i++) {
-        let sum = 0
-        const start = i * per
-        const end = i === 7 ? n : start + per
-        for (let j = start; j < end; j++) sum += freqData[j]
-        const next = Math.min(3.5, ((sum / (end - start)) / 255) * scale)
-        fftBins[i] += (next - fftBins[i]) * 0.4
+    function analyse(dt) {
+      if (analyser == null || spectrum == null) {
+        for (let i = 0; i < 6; i++) aud.bands[i] *= 1 - Math.min(1, dt * 2)
+      } else {
+        analyser.getFloatFrequencyData(spectrum)
+        const hz = audioCtx.sampleRate / analyser.fftSize
+        let flux = 0
+        BANDS.forEach(([lo, hi], i) => {
+          const a = Math.max(1, Math.floor(lo / hz))
+          const b = Math.min(spectrum.length - 1, Math.ceil(hi / hz))
+          let sum = 0
+          for (let j = a; j <= b; j++) sum += Math.pow(10, spectrum[j] / 10)
+          const db = 10 * Math.log10(sum / (b - a + 1) + 1e-12)
+          const st = bandState[i]
+          // Floor creeps up slowly and drops at once; peak falls slowly: the room sets its own range
+          st.floor = db < st.floor ? db : st.floor + dt * 0.3
+          st.peak = db > st.peak ? db : st.peak - dt * 2
+          const x = clamp01((db - st.floor) / Math.max(20, st.peak - st.floor)) * smooth(-100, -88, db)
+          const prev = st.v
+          st.v += (x - st.v) * Math.min(1, dt * 14)
+          flux += Math.max(0, st.v - prev)
+          aud.bands[i] = st.v
+        })
+        aud.onset += (flux * 6 - aud.onset) * Math.min(1, dt * 10)
       }
+      aud.low = (aud.bands[0] + aud.bands[1]) / 2
+      aud.mid = (aud.bands[2] + aud.bands[3]) / 2
+      aud.high = (aud.bands[4] + aud.bands[5]) / 2
+      aud.loud = (aud.low + aud.mid + aud.high) / 3
     }
 
-    function bass() {
-      return fftBins[0] * 0.5 + fftBins[1] * 0.35 + fftBins[2] * 0.15
-    }
-    function mids() {
-      return fftBins[2] * 0.25 + fftBins[3] * 0.4 + fftBins[4] * 0.35
-    }
-    function highs() {
-      return fftBins[5] * 0.3 + fftBins[6] * 0.4 + fftBins[7] * 0.3
-    }
-
-    let eBass = 0
-    let eMid = 0
-    let eHigh = 0
-    // Slow followers — a jump above them is a transient (lightning trigger)
-    let sBass = 0
-    let sHigh = 0
-    let eStorm = 0
-
-    function updateEnvelopes(dt) {
-      eBass += (Math.min(1.5, bass() * 1.2) - eBass) * 0.25
-      eMid += (Math.min(1.5, mids() * 1.1) - eMid) * 0.22
-      eHigh += (Math.min(1.5, highs() * 1.25) - eHigh) * 0.3
-      sBass += (eBass - sBass) * Math.min(1, dt * 1.2)
-      sHigh += (eHigh - sHigh) * Math.min(1, dt * 1.2)
-      const stormTarget = Math.min(1, Math.max(0, eBass * 0.6 + eMid * 0.4 - 0.1))
-      eStorm += (stormTarget - eStorm) * Math.min(1, dt * 0.5)
+    // Sound as energy for the atmosphere
+    const phys = { C: 0, K: 0, Q: 0, Qth: 1, W: 0, storm: 0, aurora: 0 }
+    const waveA = [0, 0, 0, 0, 0, 0]
+    function updatePhysics(dt) {
+      phys.C += (aud.low * aud.low - phys.C) * Math.min(1, dt / 12)   // convective energy (CAPE)
+      phys.K += (aud.mid * aud.mid - phys.K) * Math.min(1, dt / 40)   // turbulence, cascading upscale
+      phys.W += (aud.loud - phys.W) * Math.min(1, dt / 3)             // wind push
+      phys.Q = Math.min(2.5, phys.Q + (0.4 * aud.high + 0.6 * phys.C + 0.02) * dt)   // charge separation
+      phys.storm += (clamp01(aud.low * 0.6 + aud.mid * 0.4 - 0.1) - phys.storm) * Math.min(1, dt * 0.5)
+      phys.aurora += (0.25 + 1.2 * aud.loud - phys.aurora) * Math.min(1, dt * 2)
+      for (let i = 0; i < 6; i++) waveA[i] += (0.07 * aud.bands[i] - waveA[i]) * Math.min(1, dt * 1.5)
     }
 
     // ------------------------------------------------------------
@@ -1082,37 +1837,40 @@
     let journeyT = Math.min(DURATION, parseClock(params.get("t")))
     let running = false
     let paused = false
-    const RATES = [1, 4, 16]
+    const RATES = [1, 2, 4, 8, 12, 16]
     let rateIdx = 0
     let animT = 0
     let showCaptions = false
     let captionChapter = -1
     let captionStartT = 0
-
-    // Galilean moons in disk units; phases chosen so the opening frame matches the plate
-    const MOONS = [
-      { A: 1.35, b: 0.387, ph: -0.501, w: 0.03, s: 1, fadeIn: false },
-      { A: 1.8, b: 0.238, ph: -0.49, w: 0.019, s: 1, fadeIn: true },
-      { A: 2.0, b: 0.512, ph: -0.032, w: 0.012, s: 0.5, fadeIn: false },
-      { A: 3.0, b: 0.15, ph: 3.3, w: 0.006, s: 1, fadeIn: true }
-    ]
-    const SUN2 = [0.158, -0.112]
-    const DIVE_TARGET = [-0.3, 0.08]
+    let ending = null
 
     const cam = {
       pos: new THREE.Vector3(0, 7, 0),
       yaw: 0,
       yawRate: 0,
       vortexC: null,
-      theta: 0,
-      westAnchor: null
+      theta: 0
     }
-    let globeAudioRot = 0
     let travel = 0
     let flash = 0
-    let flashPos = new THREE.Vector2()
+    const flashPos = new THREE.Vector2()
     let restrike = -1
+    let pFlash = 0
+    const pFlashDir = new THREE.Vector3(0, 1, 0)
     const look = { yaw: 0, pitch: 0, dragging: false, x: 0, y: 0 }
+    const ring = { r: 0, amp: 0 }
+
+    function resetJourney() {
+      journeyT = 0
+      ending = null
+      cam.pos.set(0, 7, 0)
+      cam.yaw = 0
+      cam.yawRate = 0
+      cam.vortexC = null
+      travel = 0
+      captionChapter = -1
+    }
 
     function wrapPi(a) {
       return a - Math.PI * 2 * Math.round(a / (Math.PI * 2))
@@ -1131,8 +1889,8 @@
     }
 
     function updateCamera(u, dt) {
-      const speed = track(SPEED, u) * (1 + eBass * 0.6 * track(CONTROL_LOSS, u))
       const control = track(CONTROL_LOSS, u)
+      const speed = track(SPEED, u) * (1 + phys.W * 0.8 * (0.3 + control))
       const inOrbit = u >= 0.625 && u < 0.815
 
       if (inOrbit) {
@@ -1160,8 +1918,8 @@
         cam.pos.z += fz * speed * dt
       }
 
-      const shake = control * (0.03 + eBass * 0.12)
-      const yawJ = jitter(animT * 0.6, 1.3) * control * (0.08 + eBass * 0.25)
+      const shake = control * (0.03 + aud.low * 0.12 + phys.C * 0.08)
+      const yawJ = jitter(animT * 0.6, 1.3) * control * (0.08 + aud.low * 0.25)
       const vortexW = track(VORTEX, u)
       cam.pos.y =
         track(ALT, u) + vortexW * (Math.sin(animT * 0.13) * 0.25 + jitter(animT, 5.1) * shake * 1.5)
@@ -1176,65 +1934,94 @@
       }
     }
 
+    // Lightning as a relaxation oscillator: sound charges the clouds, a flash discharges them
+    function fireIfCharged(weight) {
+      if (weight <= 0 || phys.Q < phys.Qth) return false
+      phys.Q -= phys.Qth * 0.85
+      phys.Qth = 0.7 + Math.random() * 0.6
+      return true
+    }
+
     function updateLightning(u, dt) {
       const w = track(LIGHTNING, u)
-      flash *= Math.exp(-dt * 5)
+      flash *= Math.exp(-dt * 6)
       if (restrike > 0) {
         restrike -= dt
         if (restrike <= 0) flash = Math.max(flash, 0.7 + Math.random() * 0.3)
       }
-      if (w <= 0) return
-      const onset = eHigh - sHigh > 0.18 || eBass - sBass > 0.22
-      if ((onset && flash < 0.2) || Math.random() < dt * 0.06 * w) {
-        flash = Math.min(1, 0.6 + Math.random() * 0.4) * Math.max(0.35, w)
+      if (fireIfCharged(w)) {
+        flash = Math.min(1, 0.55 + phys.Q * 0.3) * Math.max(0.35, w)
         const [fx, fz] = fwd2(cam.yaw)
-        const ahead = 8 + Math.random() * 22
+        const aheadD = 8 + Math.random() * 22
         const side = (Math.random() - 0.5) * 24
-        flashPos.set(cam.pos.x + fx * ahead - fz * side, cam.pos.z + fz * ahead + fx * side)
+        flashPos.set(cam.pos.x + fx * aheadD - fz * side, cam.pos.z + fz * aheadD + fx * side)
         restrike = Math.random() < 0.5 ? 0.08 + Math.random() * 0.15 : -1
       }
     }
 
-    function setFrame(u, dt) {
-      const gt = Math.max(0, (u - 0.075) * DURATION)
-      const zoom = zoomAt(u)
-      const R = PLATE_R_SCREEN * zoom
+    // Night-side flashes seen from orbit, prevalent at high northern latitudes (Brown et al. 2018)
+    function updatePolarFlash(u, dt) {
+      pFlash *= Math.exp(-dt * 7)
+      const w = smooth(0.13, 0.14, u) * (1 - smooth(0.165, 0.175, u))
+      if (!fireIfCharged(w)) return
+      for (let tries = 0; tries < 8; tries++) {
+        const lat = (58 + Math.random() * 28) * DEG
+        const lon = Math.random() * Math.PI * 2
+        pFlashDir.set(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon))
+        if (pFlashDir.dot(uniforms.uSun.value) < -0.02) {
+          pFlash = 0.6 + Math.random() * 0.4
+          return
+        }
+      }
+    }
 
-      uniforms.uFade.value = smooth(0, 0.006, u) * (1 - smooth(0.988, 1, u))
-      uniforms.uPlateMix.value = 1 - smooth(0.055, 0.08, u)
-      uniforms.uFlightMix.value = smooth(0.19, 0.198, u)
-      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.195) / 0.008, 2)) * 0.95
-      uniforms.uZoom.value = zoom
-      uniforms.uGlobeR.value = R
-      uniforms.uGT.value = gt
-
-      // Keep the dive target (west of the central meridian) centred as we fall in
-      const s = smooth(0.12, 0.175, u)
-      const tx = DIVE_TARGET[0]
-      const ty = DIVE_TARGET[1] * 0.9355
-      uniforms.uGlobeC.value.set(
-        -(0.98796 * tx - 0.15471 * ty) * R * s,
-        -(0.15471 * tx + 0.98796 * ty) * R * s
-      )
-
-      if (u > 0.075) globeAudioRot += eBass * dt * 0.03
-      uniforms.uGlobeRot.value = gt * 0.012 + globeAudioRot
-      uniforms.uStorm.value = eStorm
-      uniforms.uSeeing.value =
-        (0.0015 + eHigh * 0.004 + eMid * 0.002) * (1 - uniforms.uFlightMix.value)
-
+    function updateMoons(gt, era) {
       MOONS.forEach((m, i) => {
-        const ph = m.ph + m.w * gt
-        const a = m.A * Math.sin(ph)
-        const z = m.A * Math.cos(ph)
-        uniforms.uMoon.value[i].set(a, m.b, z)
-        const alpha = z > 0 ? (m.fadeIn ? smooth(0, 30, gt) : 1) : 0
-        uniforms.uShadow.value[i].set(a + SUN2[0] * z * m.s, m.b + SUN2[1] * z * m.s, alpha)
+        const a = m.w * gt
+        const c = Math.cos(a)
+        const s = Math.sin(a)
+        // Trouvelot's moons hug the disk; with the era they move out to true orbits and sizes
+        const out = 1 + 1.4 * era
+        uniforms.uMoon.value[i].set(
+          (m.p0.x * c + m.p0.z * s) * out,
+          m.p0.y,
+          (-m.p0.x * s + m.p0.z * c) * out,
+          0.044 + (0.026 - 0.044) * era
+        )
       })
+    }
+
+    function setFrame(u, jdt, dt) {
+      const gt = Math.max(0, (u - 0.08) * DURATION)
+      const era = track(ERA, u)
+      const flightMix = smooth(0.192, 0.199, u)
+
+      uniforms.uPlateMix.value = 1 - smooth(0.055, 0.08, u)
+      uniforms.uFlightMix.value = flightMix
+      uniforms.uWhite.value = Math.exp(-Math.pow((u - 0.196) / 0.006, 2)) * 0.95
+      uniforms.uEra.value = era
+      uniforms.uGrain.value = 0.035 - 0.017 * era
+      uniforms.uGT.value = gt
+      uniforms.uFlowT.value = animT
+
+      if (flightMix < 1) {
+        updatePlanetCamera(u)
+        uniforms.uRot.value = gt * ROT_RATE
+        uniforms.uStorm.value = phys.storm
+        uniforms.uSeeing.value = (0.0015 + aud.high * 0.004 + aud.mid * 0.002) * (1 - era)
+        uniforms.uSun.value.copy(SUN_1880).lerp(SUN_JUNO, smooth(0.15, 0.85, era)).normalize()
+        updateMoons(gt, era)
+        uniforms.uCrystal.value.set(0.25 + 1.5 * phys.K, animT * 0.6 + phys.K * 4, -gt * 0.0006, 2)
+        uniforms.uAurora.value = phys.aurora
+        const al = uniforms.uRot.value + AURORA_LON
+        uniforms.uAuroraC.value.set(Math.cos(AURORA_LAT) * Math.sin(al), Math.sin(AURORA_LAT), Math.cos(AURORA_LAT) * Math.cos(al))
+        updatePolarFlash(u, jdt)
+        uniforms.uPFlash.value.set(pFlashDir.x, pFlashDir.y, pFlashDir.z, pFlash)
+      }
 
       if (u < 0.185) return null
 
-      const c = updateCamera(u, dt)
+      const c = updateCamera(u, jdt)
       uniforms.uCam.value.copy(cam.pos)
       uniforms.uCamAng.value.set(c.yaw, c.pitch, c.roll)
 
@@ -1253,20 +2040,27 @@
         ecl.set(cam.vortexC.x - 30 + 60 * k, cam.vortexC.y + 6 - 12 * k, 5)
       }
 
-      updateLightning(u, dt)
+      updateLightning(u, jdt)
       uniforms.uFlash.value.set(flash, flashPos.x, flashPos.y, 0)
 
-      // West cloud, fixed to the west of wherever we are
+      // Physical state of the gas around the probe
+      const P = pressureAt(cam.pos.y)
+      const T = temperatureAt(P)
+      const day = daylightAt(P)
+      uniforms.uSunLight.value = day
+      uniforms.uLocalT.value = T
+      uniforms.uJovi.value = smooth(5, 10, P)
+      uniforms.uConv.value = phys.C
+      uniforms.uTurb.value = phys.K
+      waveA.forEach((a, i) => (uniforms.uWaveA.value[i] = a))
+
+      // West cloud: a hot plume to the west, on the silicate deck
       const wd = track(WEST_DIST, u)
-      const westR = 22
-      if (u > 0.79) {
-        uniforms.uWest.value.set(cam.pos.x - wd, -3.0, cam.pos.z, westR)
-      } else {
-        uniforms.uWest.value.set(0, 0, 0, 0)
-      }
-      const westInside = u > 0.79 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 3)) : 0
-      uniforms.uWestInside.value = westInside
-      uniforms.uWestGlow.value = 0.35 + eBass * 0.9
+      const westR = 8
+      if (u > 0.83) uniforms.uWest.value.set(cam.pos.x - wd, -14.5, cam.pos.z, westR)
+      else uniforms.uWest.value.set(0, 0, 0, 0)
+      uniforms.uWestT.value = 2700 + 400 * phys.C
+      const westInside = u > 0.83 ? 1 - smooth(westR * 0.55, westR * 0.95, Math.hypot(wd, cam.pos.y + 14.5)) : 0
 
       // Fog when the camera sits inside a deck
       let fogAmt = 0
@@ -1275,13 +2069,13 @@
         const a = L.op * (1 - smooth(0, 0.75, Math.abs(cam.pos.y - L.h)))
         if (a > fogAmt) {
           fogAmt = a
-          fogCol = L.fog
+          fogCol = L.T != null ? emitRGB(L.T) : L.fog.map((v) => v * (0.12 + 0.88 * day))
         }
       }
       const fog = uniforms.uFog.value
       if (westInside > fogAmt) {
-        const g = 0.8 + eBass * 0.5
-        fog.set(0.62 * g, 0.64 * g, 0.7 * g, westInside * (0.6 + eMid * 0.3))
+        const e = emitRGB(uniforms.uWestT.value)
+        fog.set(e[0], e[1], e[2], westInside * (0.6 + aud.mid * 0.3))
       } else {
         const red = vortexW * 0.5
         fog.set(fogCol[0] * (1 + red * 0.25), fogCol[1] * (1 - red * 0.3), fogCol[2] * (1 - red * 0.4), fogAmt)
@@ -1289,18 +2083,78 @@
 
       uniforms.uMotes.value = track(MOTES, u)
       const y = cam.pos.y
-      uniforms.uMoteTint.value.set(
-        y > 1 ? 0.95 : y > -1 ? 0.85 : 0.75,
-        y > 1 ? 0.92 : y > -1 ? 0.7 : 0.78,
-        y > 1 ? 0.85 : y > -1 ? 0.55 : 0.85
-      )
+      if (T > 900) {
+        const e = emitRGB(T + 300)
+        uniforms.uMoteTint.value.set(e[0], e[1], e[2])
+      } else {
+        uniforms.uMoteTint.value.set(
+          y > 1 ? 0.95 : y > -1 ? 0.85 : 0.75,
+          y > 1 ? 0.92 : y > -1 ? 0.7 : 0.78,
+          y > 1 ? 0.85 : y > -1 ? 0.55 : 0.85
+        )
+      }
+      const rainAmt = track(RAIN, u)
+      uniforms.uRain.value = rainAmt * (u < 0.9 ? 0.4 + phys.C : 1)
+      if (u > 0.9) {
+        const e = emitRGB(3400)
+        uniforms.uRainTint.value.set(e[0], e[1], e[2])
+      } else {
+        uniforms.uRainTint.value.set(0.8 * (0.3 + 0.7 * day), 0.84 * (0.3 + 0.7 * day), 0.9 * (0.3 + 0.7 * day))
+      }
       uniforms.uTravel.value = travel % 1
       uniforms.uBandTint.value = track(BAND_TINT, u)
-      return c
+      return { ...c, P, T }
     }
 
     // ------------------------------------------------------------
-    // HUD — probe readout (H) and text of the piece (T)
+    // ENDING — the bardo: darkness, then a mirror mosaic shining at the centre
+    // ------------------------------------------------------------
+
+    function startEnding() {
+      if (ending != null || !running) return
+      ending = { t: 0, rot: 0 }
+    }
+
+    // 0–12 s the world goes black (death); 12–15 s nothing; then a tangle of cyan threads,
+    // the mirror mosaic opening inside it; from ~42 s everything gathers into a point and goes out.
+    function updateEnding(dt) {
+      if (ending == null) {
+        uniforms.uBardo.value.set(0, 0, 0, 0)
+        uniforms.uStrands.value.set(0, 0)
+        uniforms.uBardoDark.value = 0
+        return 1
+      }
+      ending.t += dt * Math.min(RATES[rateIdx], 2)
+      const t = ending.t
+      ending.rot += dt * (0.05 + 0.1 * aud.loud)
+      if (aud.onset > 0.35 && ring.amp < 0.3) {
+        ring.r = 0
+        ring.amp = Math.min(1, aud.onset)
+      }
+      ring.r += dt * 0.4
+      ring.amp *= Math.exp(-dt * 0.8)
+      const gather = smooth(41, 49, t)
+      const size = FINAL_LARGE ? 0.62 : 0.06
+      const grow = 1 - Math.pow(1 - smooth(20, 34, t), 3)
+      uniforms.uBardo.value.set(
+        smooth(20, 30, t) * (1 - smooth(41, 48, t)),
+        size * (FINAL_LARGE ? grow : 0.55 + 0.45 * grow) * (1 - 0.9 * gather),
+        ending.rot,
+        smooth(22, 32, t) * (1 - smooth(42, 50, t))
+      )
+      uniforms.uStrands.value.set(
+        smooth(15, 22, t) * (1 - smooth(42, 49, t)),
+        (FINAL_LARGE ? 0.7 : 0.085) * (0.8 + 0.2 * smooth(15, 30, t) + 0.06 * phys.W) * (1 - 0.9 * gather)
+      )
+      uniforms.uBardoCyan.value = FINAL_LARGE ? 0.25 : 1
+      uniforms.uBardoT.value = t
+      uniforms.uBardoDark.value = smooth(0, 12, t)
+      uniforms.uBardoWave.value.set(ring.r, ring.amp)
+      return 1 - smooth(0, 10, t)
+    }
+
+    // ------------------------------------------------------------
+    // HUD — probe readout (H) and text of the piece (T); no clock on screen
     // ------------------------------------------------------------
 
     function clock(s) {
@@ -1309,37 +2163,77 @@
       return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0")
     }
 
+    function fmtPressure(P) {
+      if (P >= 1e6) return (P / 1e6).toFixed(2).replace(".", ",") + " Mbar"
+      if (P >= 1000) return (P / 1000).toFixed(1).replace(".", ",") + " kbar"
+      if (P >= 100) return Math.round(P) + " bar"
+      return P.toFixed(P < 1 ? 2 : 1).replace(".", ",") + " bar"
+    }
+
+    function zoneNote(alt, P, T, vortexW) {
+      if (vortexW > 0.5) return "Gran Mancha Roja · anillo exterior ~650 km/h (Wong 2021) · raíces de 300–500 km (Juno)"
+      if (alt > 4.3) return "estratosfera · bruma fotoquímica sobre la tropopausa"
+      if (alt > 2.6) return "tropopausa · ~110 K"
+      if (alt > 1.0) return "nubes de hielo de amoníaco (NH₃)"
+      if (alt > -1.0) return "hidrosulfuro de amonio (NH₄SH) · relámpagos someros y granizo de amoníaco (Becker 2020)"
+      if (alt > -3.0) return "nubes de agua (H₂O) · relámpagos"
+      if (P < 30) return "Galileo · última señal a 22 bar y 428 K (1995)"
+      if (T < 798) return "oscuridad · la luz del Sol no llega"
+      if (alt > -11) return "punto de Draper (798 K) · el gas empieza a brillar"
+      if (alt > -13.5) return "nubes de sulfuro de sodio (Na₂S)"
+      if (alt > -18) return "nubes de silicato · forsterita líquida"
+      if (alt > -20.5) return "lluvia de hierro líquido"
+      return "hacia el hidrógeno metálico · lluvia de helio (Militzer)"
+    }
+
+    function planetLines(u, ch) {
+      if (ch === 0) {
+        return ["Harvard College Observatory · 1 nov 1880 · 21:30", "imagen de telescopio · sur arriba"]
+      }
+      const era = track(ERA, u)
+      const altKm = Math.round((planetCam.d - 1) * 71492)
+      const lines = [
+        `época ${Math.round(1880 + era * 139)}${era >= 1 ? " · mapa Hubble/OPAL" : ""}`,
+        `altitud ${altKm.toLocaleString("es")} km sobre las nubes`
+      ]
+      if (u > 0.135 && u < 0.162) lines.push('<span class="note">Juno · polo norte: 8 ciclones alrededor de 1 (Adriani et al. 2018)</span>')
+      else if (u >= 0.162) lines.push('<span class="note">perijove · ~58 km/s · hacia la entrada de Galileo, 6,5°N (1995)</span>')
+      return lines
+    }
+
     let hudTimer = 0
     function updateHud(u, ch, c, dt) {
+      const fadeOut = ending == null ? 1 : 1 - smooth(0, 6, ending.t)
+      hud.style.opacity = String(fadeOut)
       hudTimer -= dt
-      if (hudTimer <= 0 && hud.classList.contains("show")) {
+      if (hudTimer <= 0) {
         hudTimer = 0.25
-        const lines = [`<div class="chapter">${CHAPTERS[ch].name}</div>`]
-        if (c == null) {
-          if (ch === 0) {
-            lines.push("Harvard College Observatory · 1 nov 1880 · 21:30")
-            lines.push("distancia 628 millones de km")
+        if (hud.classList.contains("show")) {
+          const lines = [`<div class="chapter">${CHAPTERS[ch].name}</div>`]
+          if (c == null) {
+            lines.push(...planetLines(u, ch))
           } else {
-            const alpha = Math.atan(PLATE_R_SCREEN * zoomAt(u) * 0.93)
-            const km = Math.round(71492 * (1 / Math.sin(alpha) - 1))
-            lines.push("aproximación · sin superficie")
-            lines.push(`altitud ${km.toLocaleString("es")} km sobre las nubes`)
+            const km = depthAt(c.P)
+            const vortexW = track(VORTEX, u)
+            const base = windAt(c.P, km) * 3.6 * (1 + phys.W * 0.3)
+            const kmh = Math.round(base + (650 + 120 * phys.W - base) * vortexW)
+            const heading = Math.round((((270 - (c.yaw * 180) / Math.PI) % 360) + 360) % 360)
+            const ctrl = clamp01(1 - c.control * 0.85 - c.control * aud.low * 0.15)
+            lines.push(`presión ${fmtPressure(c.P)} · ${Math.round(c.T).toLocaleString("es")} K · ${km <= 0 ? "+" : "−"}${Math.abs(Math.round(km)).toLocaleString("es")} km`)
+            lines.push(`viento ${kmh} km/h · rumbo ${heading}°`)
+            lines.push(`control <span class="bar"><i style="width:${Math.round(ctrl * 100)}%"></i></span>`)
+            lines.push(`<span class="note">${zoneNote(cam.pos.y, c.P, c.T, vortexW)}</span>`)
           }
-        } else {
-          const P = 2 * Math.exp(-cam.pos.y * 0.55)
-          const T = Math.max(110, 165 * Math.pow(P, 0.33))
-          const km = -27 * Math.log(P)
-          const kmh = Math.round(150 + c.speed * 150)
-          const heading = Math.round((((270 - (c.yaw * 180) / Math.PI) % 360) + 360) % 360)
-          const ctrl = Math.max(0, Math.min(1, 1 - c.control * 0.85 - c.control * eBass * 0.15))
-          lines.push(`presión ${P.toFixed(P < 1 ? 2 : 1)} bar · ${Math.round(T)} K · ${km >= 0 ? "+" : "−"}${Math.abs(km).toFixed(0)} km`)
-          lines.push(`viento ${kmh} km/h · rumbo ${heading}°`)
-          lines.push(`control <span class="bar"><i style="width:${Math.round(ctrl * 100)}%"></i></span>`)
+          hud.innerHTML = lines.join("<br />")
         }
-        const rate = RATES[rateIdx] > 1 ? ` · ensayo ×${RATES[rateIdx]}` : ""
-        lines.push(`${clock(journeyT)} / ${clock(DURATION)}${paused ? " · pausa" : ""}${rate}`)
-        hud.innerHTML = lines.join("<br />")
+        if (opPanel.classList.contains("open")) {
+          const rate = RATES[rateIdx] > 1 ? ` · ×${RATES[rateIdx]}` : ""
+          const state = ending != null ? " · final" : paused ? " · pausa" : ""
+          opClock.textContent = `${clock(journeyT)} / ${clock(DURATION)}${state}${rate}`
+          opChapter.textContent = CHAPTERS[ch].name
+        }
       }
+      opMeter.style.width = `${Math.round(aud.loud * 100)}%`
 
       if (ch !== captionChapter) {
         captionChapter = ch
@@ -1347,7 +2241,7 @@
         captionEl.textContent = CHAPTERS[ch].line
       }
       const since = journeyT - captionStartT
-      const op = showCaptions ? smooth(0, 3, since) * (1 - smooth(14, 18, since)) : 0
+      const op = showCaptions ? smooth(0, 3, since) * (1 - smooth(14, 18, since)) * fadeOut : 0
       captionEl.style.opacity = String(op)
     }
 
@@ -1360,37 +2254,72 @@
       captionChapter = -1
     }
 
+    const isFullscreen = () => (document.fullscreenElement ?? document.webkitFullscreenElement) != null
+    function enterFullscreen() {
+      const el = document.documentElement
+      const request = el.requestFullscreen ?? el.webkitRequestFullscreen
+      if (!isFullscreen()) request?.call(el)?.catch?.(() => {})
+    }
+    function toggleFullscreen() {
+      if (!isFullscreen()) {
+        enterFullscreen()
+        return
+      }
+      const exit = document.exitFullscreen ?? document.webkitExitFullscreen
+      exit?.call(document)?.catch?.(() => {})
+    }
+
+    // Playback speed for rehearsal: → faster, ← slower; ×12 shows the whole journey in about 3½ minutes
+    const speedEl = document.getElementById("speed")
+    let speedTimer = 0
+    function setRate(i) {
+      rateIdx = Math.max(0, Math.min(RATES.length - 1, i))
+      const r = RATES[rateIdx]
+      speedEl.textContent = r === 1 ? "velocidad normal" : `▶▶ ×${r} · el viaje completo en ${clock(DURATION / r)}`
+      speedEl.classList.add("show")
+      clearTimeout(speedTimer)
+      speedTimer = setTimeout(() => speedEl.classList.remove("show"), 2200)
+    }
+    document.getElementById("op-slower").addEventListener("click", () => setRate(rateIdx - 1))
+    document.getElementById("op-faster").addEventListener("click", () => setRate(rateIdx + 1))
+    document.getElementById("op-full").addEventListener("click", toggleFullscreen)
+    document.getElementById("op-end").addEventListener("click", startEnding)
+
     window.addEventListener("keydown", (e) => {
-      if (e.key === "m" || e.key === "M") micPanel.classList.toggle("open")
+      if (e.key === "m" || e.key === "M") opPanel.classList.toggle("open")
       if (!running) return
       if (e.key === " ") {
         paused = !paused
         e.preventDefault()
       } else if (e.key === "ArrowRight") {
-        jumpTo(journeyT + (e.shiftKey ? 300 : 30))
+        if (e.shiftKey) jumpTo(journeyT + 30)
+        else setRate(rateIdx + 1)
       } else if (e.key === "ArrowLeft") {
-        jumpTo(journeyT - (e.shiftKey ? 300 : 30))
+        if (e.shiftKey) jumpTo(journeyT - 30)
+        else setRate(rateIdx - 1)
       } else if (e.key >= "1" && e.key <= "7") {
         jumpTo(CHAPTERS[Number(e.key) - 1].at * DURATION)
+      } else if (e.key === "f" || e.key === "F") {
+        startEnding()
+      } else if (e.key === "p" || e.key === "P") {
+        toggleFullscreen()
       } else if (e.key === "t" || e.key === "T") {
         showCaptions = !showCaptions
         captionChapter = -1
       } else if (e.key === "h" || e.key === "H") {
         hud.classList.toggle("show")
         hudTimer = 0
-      } else if (e.key === "s" || e.key === "S") {
-        rateIdx = (rateIdx + 1) % RATES.length
-      } else if (e.key === "f" || e.key === "F") {
-        if (document.fullscreenElement == null) document.documentElement.requestFullscreen?.()
-        else document.exitFullscreen?.()
+      } else if (e.key === "R" && e.shiftKey) {
+        resetJourney()
       }
     })
 
-    // iPad / concert: triple-tap top-right corner to show/hide panel
+    // iPad / concert: triple-tap top-right corner to show/hide the operator panel
     let cornerTaps = 0
     let cornerTimer = 0
     window.addEventListener("pointerdown", (e) => {
       if (e.clientX < window.innerWidth - 56 || e.clientY > 56) {
+        if (opPanel.contains(e.target)) return
         look.dragging = true
         look.x = e.clientX
         look.y = e.clientY
@@ -1402,7 +2331,7 @@
       cornerTaps += 1
       if (cornerTaps >= 3) {
         cornerTaps = 0
-        micPanel.classList.toggle("open")
+        opPanel.classList.toggle("open")
       }
     })
     window.addEventListener("pointermove", (e) => {
@@ -1419,12 +2348,11 @@
     })
 
     // Keep an iPad awake for the whole piece
-    let wakeLock = null
     async function keepAwake() {
       try {
-        wakeLock = await navigator.wakeLock?.request("screen")
+        await navigator.wakeLock?.request("screen")
       } catch {
-        wakeLock = null
+        // Wake Lock is optional; the show runs without it
       }
     }
     document.addEventListener("visibilitychange", () => {
@@ -1460,13 +2388,15 @@
       lastNow = now
       if (dt > 0.1) dt = 0.1
 
-      const rate = RATES[rateIdx]
-      const jdt = running && !paused ? dt * rate : 0
-      journeyT = Math.min(DURATION, journeyT + jdt)
-      animT += dt * (paused ? 0.25 : rate)
+      analyse(dt)
+      updatePhysics(dt)
+      const settle = updateEnding(dt)
 
-      sampleFft()
-      updateEnvelopes(dt)
+      const rate = RATES[rateIdx]
+      const jdt = running && !paused ? dt * rate * settle : 0
+      journeyT = Math.min(DURATION, journeyT + jdt)
+      animT += dt * (paused ? 0.25 : rate) * (0.3 + 0.7 * settle)
+      if (running && ending == null && journeyT >= DURATION - END_SECONDS) startEnding()
 
       if (!look.dragging) {
         look.yaw *= 1 - Math.min(1, dt * 0.8)
@@ -1476,11 +2406,14 @@
       const u = journeyT / DURATION
       const ch = chapterIndex(u)
       uniforms.uTime.value = animT
-      uniforms.uBass.value = eBass
-      uniforms.uMid.value = eMid
-      uniforms.uHigh.value = eHigh
-      const c = setFrame(u, jdt)
-      if (!running) uniforms.uFade.value = 0.35
+      uniforms.uBass.value = aud.low
+      uniforms.uMid.value = aud.mid
+      uniforms.uHigh.value = aud.high
+      uniforms.uLoud.value = aud.loud
+      const c = setFrame(u, jdt, dt)
+      uniforms.uFade.value = running
+        ? smooth(0, 0.006, u) * (ending == null ? 1 : 1 - smooth(48.5, 50, ending.t))
+        : 0.35
       updateHud(u, ch, c, dt)
 
       // Resize before drawing: a resize clears the canvas, and presenting that would flash black
@@ -1492,6 +2425,8 @@
 
     async function begin(withMic) {
       errEl.textContent = ""
+      // Fullscreen must be requested synchronously inside the tap
+      if (document.getElementById("opt-full").checked) enterFullscreen()
       if (withMic) {
         try {
           await startMic()
